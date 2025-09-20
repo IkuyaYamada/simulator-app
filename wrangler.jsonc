@@ -12,7 +12,14 @@
 	},
 	"observability": {
 		"enabled": true
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "simulator_app_db",
+			"database_name": "simulator-app-db",
+			"database_id": "209c7ccc-d9f9-4d56-92fa-1a16e3d18372"
+		}
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
