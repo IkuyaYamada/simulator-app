@@ -11,4 +11,14 @@ export default defineConfig({
     reactRouter(),
     tsconfigPaths(),
   ],
+  // Cloudflare環境でのデバッグログ設定
+  define: {
+    __DEV__: JSON.stringify(process.env.NODE_ENV === 'development'),
+  },
+  server: {
+    // 開発サーバーのログレベル
+    hmr: {
+      overlay: true,
+    },
+  },
 });

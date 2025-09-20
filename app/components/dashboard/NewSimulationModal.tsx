@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useFetcher } from "react-router";
+import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Bar } from 'recharts';
 
 interface NewSimulationModalProps {
   isOpen: boolean;
@@ -9,18 +11,40 @@ export function NewSimulationModal({
   isOpen,
   onClose,
 }: NewSimulationModalProps) {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0); // 0: 選択画面, 1: AI銘柄スクリーニング, 2: 銘柄指定, 3: シミュレーション設定
   const [searchKeywords, setSearchKeywords] = useState("");
   const [aiResponse, setAiResponse] = useState("");
   const [selectedStock, setSelectedStock] = useState<any>(null);
+  const [simulationType, setSimulationType] = useState<'ai-screening' | 'preset-stock' | null>(null);
+  
+  // 銘柄情報入力用の状態
+  const [tickerSymbol, setTickerSymbol] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [industry, setIndustry] = useState("");
+  
+  // 株価情報取得用
+  const stockInfoFetcher = useFetcher();
+
+  // 株価情報取得結果の処理
+  useEffect(() => {
+    if (stockInfoFetcher.data && !stockInfoFetcher.data.error) {
+      const stockData = stockInfoFetcher.data;
+      setCompanyName(stockData.longName || stockData.shortName || "");
+      setIndustry(stockData.industry || stockData.sector || "");
+    }
+  }, [stockInfoFetcher.data]);
 
   if (!isOpen) return null;
 
   const handleClose = () => {
-    setCurrentStep(1);
+    setCurrentStep(0);
     setSearchKeywords("");
     setAiResponse("");
     setSelectedStock(null);
+    setSimulationType(null);
+    setTickerSymbol("");
+    setCompanyName("");
+    setIndustry("");
     onClose();
   };
 
@@ -29,7 +53,40 @@ export function NewSimulationModal({
   };
 
   const handleBack = () => {
-    setCurrentStep(currentStep - 1);
+    if (currentStep === 1 && simulationType === 'ai-screening') {
+      setCurrentStep(0);
+    } else if (currentStep === 2 && simulationType === 'preset-stock') {
+      setCurrentStep(0);
+    } else if (currentStep === 3) {
+      setCurrentStep(simulationType === 'ai-screening' ? 1 : 2);
+    } else {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleSelectSimulationType = (type: 'ai-screening' | 'preset-stock') => {
+    setSimulationType(type);
+    setCurrentStep(type === 'ai-screening' ? 1 : 2);
+  };
+
+  // ティッカーシンボル変更時の処理
+  const handleTickerSymbolChange = (symbol: string) => {
+    setTickerSymbol(symbol);
+  };
+
+  // 株価情報を取得する処理
+  const fetchStockInfo = () => {
+    if (tickerSymbol.length >= 1) {
+      stockInfoFetcher.load(`/api/stock-info?symbol=${tickerSymbol.toUpperCase()}`);
+    }
+  };
+
+  // Enterキーで検索
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      fetchStockInfo();
+    }
   };
 
   const generateAIPrompt = (keywords: string) => {
@@ -107,47 +164,151 @@ export function NewSimulationModal({
         </div>
 
         {/* ステップインジケーター */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-center space-x-4">
-            {[1, 2, 3].map((step) => (
-              <div key={step} className="flex items-center">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    step <= currentStep
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-                  }`}
-                >
-                  {step}
-                </div>
-                <span
-                  className={`ml-2 text-sm ${
-                    step <= currentStep
-                      ? "text-blue-600 dark:text-blue-400 font-medium"
-                      : "text-gray-500 dark:text-gray-400"
-                  }`}
-                >
-                  {step === 1 && "銘柄検索"}
-                  {step === 2 && "AI分析"}
-                  {step === 3 && "シミュレーション設定"}
-                </span>
-                {step < 3 && (
-                  <div
-                    className={`w-8 h-0.5 mx-4 ${
-                      step < currentStep
-                        ? "bg-blue-600"
-                        : "bg-gray-200 dark:bg-gray-700"
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
+        {currentStep > 0 && (
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-center space-x-4">
+              {simulationType === 'ai-screening' ? (
+                // AI銘柄スクリーニングのステップ
+                [1, 2, 3].map((step) => (
+                  <div key={step} className="flex items-center">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                        step <= currentStep
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
+                      {step}
+                    </div>
+                    <span
+                      className={`ml-2 text-sm ${
+                        step <= currentStep
+                          ? "text-blue-600 dark:text-blue-400 font-medium"
+                          : "text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
+                      {step === 1 && "銘柄検索"}
+                      {step === 2 && "AI分析"}
+                      {step === 3 && "シミュレーション設定"}
+                    </span>
+                    {step < 3 && (
+                      <div
+                        className={`w-8 h-0.5 mx-4 ${
+                          step < currentStep
+                            ? "bg-blue-600"
+                            : "bg-gray-200 dark:bg-gray-700"
+                        }`}
+                      />
+                    )}
+                  </div>
+                ))
+              ) : (
+                // 銘柄指定のステップ
+                [1, 2].map((step) => (
+                  <div key={step} className="flex items-center">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                        step <= (currentStep - 1)
+                          ? "bg-green-600 text-white"
+                          : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
+                      {step}
+                    </div>
+                    <span
+                      className={`ml-2 text-sm ${
+                        step <= (currentStep - 1)
+                          ? "text-green-600 dark:text-green-400 font-medium"
+                          : "text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
+                      {step === 1 && "銘柄指定"}
+                      {step === 2 && "シミュレーション設定"}
+                    </span>
+                    {step < 2 && (
+                      <div
+                        className={`w-8 h-0.5 mx-4 ${
+                          step < (currentStep - 1)
+                            ? "bg-green-600"
+                            : "bg-gray-200 dark:bg-gray-700"
+                        }`}
+                      />
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* コンテンツ */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-          {currentStep === 1 && (
+          {currentStep === 0 && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                  🚀 シミュレーション開始方法を選択
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">
+                  どの方法でシミュレーションを開始しますか？
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* AI銘柄スクリーニング */}
+                  <div 
+                    onClick={() => handleSelectSimulationType('ai-screening')}
+                    className="cursor-pointer bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-lg p-6 hover:border-blue-300 dark:hover:border-blue-700 transition-all hover:shadow-lg"
+                  >
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                      </div>
+                      <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                        AI銘柄スクリーニング
+                      </h4>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+                        AIが投資テーマを分析して最適な銘柄を提案します
+                      </p>
+                      <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                        <p>• キーワード検索</p>
+                        <p>• AI分析プロンプト生成</p>
+                        <p>• 推奨銘柄の選定</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 銘柄がわかっている場合 */}
+                  <div 
+                    onClick={() => handleSelectSimulationType('preset-stock')}
+                    className="cursor-pointer bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg p-6 hover:border-green-300 dark:hover:border-green-700 transition-all hover:shadow-lg"
+                  >
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <h4 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-2">
+                        銘柄がわかっている場合
+                      </h4>
+                      <p className="text-sm text-green-700 dark:text-green-300 mb-4">
+                        既に投資したい銘柄が決まっている場合
+                      </p>
+                      <div className="text-xs text-green-600 dark:text-green-400 space-y-1">
+                        <p>• 銘柄情報の直接入力</p>
+                        <p>• シミュレーション設定</p>
+                        <p>• すぐに開始</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 1 && simulationType === 'ai-screening' && (
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
@@ -172,7 +333,7 @@ export function NewSimulationModal({
             </div>
           )}
 
-          {currentStep === 2 && (
+          {currentStep === 2 && simulationType === 'ai-screening' && (
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
@@ -221,6 +382,287 @@ export function NewSimulationModal({
             </div>
           )}
 
+          {currentStep === 2 && simulationType === 'preset-stock' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                  📊 銘柄情報入力
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  投資したい銘柄の情報を入力してください。
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      ティッカーシンボル *
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={tickerSymbol}
+                        onChange={(e) => handleTickerSymbolChange(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="例: AAPL"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={fetchStockInfo}
+                        disabled={!tickerSymbol.trim() || stockInfoFetcher.state === "loading"}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors whitespace-nowrap"
+                      >
+                        {stockInfoFetcher.state === "loading" ? "検索中..." : "🔍 検索"}
+                      </button>
+                    </div>
+                    {stockInfoFetcher.state === "loading" && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        📡 株価情報を取得中...
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      会社名 *
+                    </label>
+                    <input
+                      type="text"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      placeholder="例: Apple Inc."
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      業界（任意）
+                    </label>
+                    <input
+                      type="text"
+                      value={industry}
+                      onChange={(e) => setIndustry(e.target.value)}
+                      placeholder="例: テクノロジー/コンシューマーエレクトロニクス"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+
+                {/* 株価情報表示 */}
+                {stockInfoFetcher.data && !stockInfoFetcher.data.error && (
+                  <div className="mt-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <h4 className="font-medium text-green-900 dark:text-green-100">
+                        📊 株価情報
+                      </h4>
+                      <div className="text-xs text-green-600 dark:text-green-400">
+                        <p>更新: {stockInfoFetcher.data.marketTimeFormatted}</p>
+                        <p>市場状態: {stockInfoFetcher.data.marketState}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-green-700 dark:text-green-300 font-medium">現在価格</p>
+                <p className="text-green-900 dark:text-green-100 font-bold">
+                  {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.regularMarketPrice?.toFixed(2) || 'N/A'}
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-400">
+                  {stockInfoFetcher.data.marketTimeFormatted}
+                </p>
+              </div>
+                      <div>
+                        <p className="text-green-700 dark:text-green-300 font-medium">変動額</p>
+                        <p className={`font-bold ${
+                          (stockInfoFetcher.data.regularMarketChange || 0) >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {stockInfoFetcher.data.regularMarketChange >= 0 ? '+' : ''}
+                          {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.regularMarketChange?.toFixed(2) || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-green-700 dark:text-green-300 font-medium">変動率</p>
+                        <p className={`font-bold ${
+                          (stockInfoFetcher.data.regularMarketChangePercent || 0) >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {stockInfoFetcher.data.regularMarketChangePercent >= 0 ? '+' : ''}
+                          {(stockInfoFetcher.data.regularMarketChangePercent * 100)?.toFixed(2) || 'N/A'}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-green-700 dark:text-green-300 font-medium">取引量</p>
+                        <p className="text-green-900 dark:text-green-100 font-bold">
+                          {stockInfoFetcher.data.regularMarketVolume?.toLocaleString() || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-700">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                        <div>
+                          <p className="text-green-600 dark:text-green-400">前日終値</p>
+                          <p className="text-green-900 dark:text-green-100">
+                            {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.regularMarketPreviousClose?.toFixed(2) || 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-green-600 dark:text-green-400">始値</p>
+                          <p className="text-green-900 dark:text-green-100">
+                            {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.regularMarketOpen?.toFixed(2) || 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-green-600 dark:text-green-400">高値・安値</p>
+                          <p className="text-green-900 dark:text-green-100">
+                            {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.regularMarketDayHigh?.toFixed(2) || 'N/A'} / 
+                            {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.regularMarketDayLow?.toFixed(2) || 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-green-600 dark:text-green-400">取引所</p>
+                          <p className="text-green-900 dark:text-green-100">
+                            {stockInfoFetcher.data.exchange} ({stockInfoFetcher.data.currency})
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-700">
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <p className="text-green-600 dark:text-green-400">52週高値</p>
+                            <p className="text-green-900 dark:text-green-100">
+                              {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.fiftyTwoWeekHigh?.toFixed(2) || 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-green-600 dark:text-green-400">52週安値</p>
+                            <p className="text-green-900 dark:text-green-100">
+                              {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.fiftyTwoWeekLow?.toFixed(2) || 'N/A'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* 価格チャート */}
+                    {stockInfoFetcher.data.chartData && stockInfoFetcher.data.chartData.length > 0 && (
+                      <div className="mt-4 bg-white dark:bg-gray-800 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                        <h5 className="font-medium text-green-900 dark:text-green-100 mb-3">
+                          📈 過去100日間の価格推移
+                        </h5>
+                        <div style={{ width: '100%', height: '250px' }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={stockInfoFetcher.data.chartData}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis 
+                                dataKey="date" 
+                                stroke="#6b7280"
+                                fontSize={11}
+                                tickCount={6}
+                              />
+              <YAxis 
+                stroke="#6b7280"
+                fontSize={11}
+                domain={['dataMin - 2', 'dataMax + 2']}
+                tickFormatter={(value) => {
+                  const currency = stockInfoFetcher.data.currency || 'USD';
+                  const symbol = currency === 'JPY' ? '¥' : '$';
+                  return `${symbol}${value?.toFixed(0)}`;
+                }}
+              />
+                              <Tooltip 
+                                contentStyle={{
+                                  backgroundColor: '#f9fafb',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '6px',
+                                  color: '#374151',
+                                  fontSize: '12px'
+                                }}
+                                formatter={(value: number, name: string) => {
+                                  const currency = stockInfoFetcher.data.currency || 'USD';
+                                  const symbol = currency === 'JPY' ? '¥' : '$';
+                                  const formatValue = (val: number) => `${symbol}${val?.toFixed(2) || 'N/A'}`;
+                                  if (name === 'high') return [formatValue(value), '高値'];
+                                  if (name === 'low') return [formatValue(value), '安値'];
+                                  if (name === 'close') return [formatValue(value), '終値'];
+                                  if (name === 'volume') return [value?.toLocaleString() || 'N/A', '出来高'];
+                                  return [formatValue(value), name];
+                                }}
+                                labelFormatter={(label, payload) => {
+                                  if (payload && payload[0]) {
+                                    const data = payload[0].payload;
+                                    return `${data.fullDate} (${label})`;
+                                  }
+                                  return label;
+                                }}
+                              />
+                              {/* ローソク足風の表示：高値・安値のライン */}
+                              <Line 
+                                type="monotone" 
+                                dataKey="high" 
+                                stroke="#ef4444" 
+                                strokeWidth={1}
+                                dot={false}
+                                connectNulls={false}
+                                name="高値"
+                              />
+                              <Line 
+                                type="monotone" 
+                                dataKey="low" 
+                                stroke="#3b82f6" 
+                                strokeWidth={1}
+                                dot={false}
+                                connectNulls={false}
+                                name="安値"
+                              />
+                              {/* 終値のライン */}
+                              <Line 
+                                type="monotone" 
+                                dataKey="close" 
+                                stroke="#10b981" 
+                                strokeWidth={2}
+                                dot={{ fill: '#10b981', strokeWidth: 2, r: 2 }}
+                                connectNulls={false}
+                                name="終値"
+                              />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex justify-between items-center mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-0.5 bg-red-500"></div>
+                              <span>高値</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-0.5 bg-blue-500"></div>
+                              <span>安値</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-0.5 bg-green-500"></div>
+                              <span>終値</span>
+                            </div>
+                          </div>
+                          <span>※ 過去100日間の日足データ</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {stockInfoFetcher.data?.error && (
+                  <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                    <p className="text-red-700 dark:text-red-300 text-sm">
+                      ⚠️ {stockInfoFetcher.data.error}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {currentStep === 3 && (
             <div className="space-y-6">
               <div>
@@ -228,8 +670,41 @@ export function NewSimulationModal({
                   ⚙️ シミュレーション設定
                 </h3>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  AI分析結果を元に、シミュレーションの詳細設定を行います。
+                  {simulationType === 'ai-screening' 
+                    ? 'AI分析結果を元に、シミュレーションの詳細設定を行います。'
+                    : '入力された銘柄情報でシミュレーションの詳細設定を行います。'
+                  }
                 </p>
+
+                {/* 選択された銘柄情報の表示 */}
+                {simulationType === 'preset-stock' && (tickerSymbol || companyName) && (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+                    <h4 className="font-medium text-green-900 dark:text-green-100 mb-2">
+                      📊 選択された銘柄
+                    </h4>
+                    <div className="text-sm text-green-700 dark:text-green-300">
+                      <p><strong>ティッカー:</strong> {tickerSymbol}</p>
+                      <p><strong>会社名:</strong> {companyName}</p>
+                      {industry && <p><strong>業界:</strong> {industry}</p>}
+                    </div>
+                    {stockInfoFetcher.data && !stockInfoFetcher.data.error && (
+                      <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-700">
+                        <p className="text-xs text-green-600 dark:text-green-400 mb-1">現在価格</p>
+                        <p className="text-lg font-bold text-green-900 dark:text-green-100">
+                          ${stockInfoFetcher.data.regularMarketPrice?.toFixed(2) || 'N/A'}
+                          <span className={`ml-2 text-sm ${
+                            (stockInfoFetcher.data.regularMarketChange || 0) >= 0
+                              ? 'text-green-600 dark:text-green-400'
+                              : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            ({stockInfoFetcher.data.regularMarketChange >= 0 ? '+' : ''}
+                            ${stockInfoFetcher.data.regularMarketChange?.toFixed(2) || 'N/A'})
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -263,18 +738,28 @@ export function NewSimulationModal({
         {/* フッター */}
         <div className="flex justify-between items-center p-6 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={currentStep === 1 ? handleClose : handleBack}
+            onClick={currentStep === 0 ? handleClose : handleBack}
             className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
           >
-            {currentStep === 1 ? "キャンセル" : "戻る"}
+            {currentStep === 0 ? "キャンセル" : "戻る"}
           </button>
 
           <div className="flex gap-3">
-            {currentStep < 3 ? (
+            {currentStep === 0 ? (
+              // 選択画面では何も表示しない
+              null
+            ) : currentStep < 3 ? (
               <button
                 onClick={handleNext}
-                disabled={currentStep === 1 && !searchKeywords.trim()}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2 px-6 rounded-lg font-medium transition-colors"
+                disabled={
+                  (currentStep === 1 && simulationType === 'ai-screening' && !searchKeywords.trim()) ||
+                  (currentStep === 2 && simulationType === 'preset-stock')
+                }
+                className={`${
+                  simulationType === 'ai-screening' 
+                    ? 'bg-blue-600 hover:bg-blue-700' 
+                    : 'bg-green-600 hover:bg-green-700'
+                } disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2 px-6 rounded-lg font-medium transition-colors`}
               >
                 次へ
               </button>
