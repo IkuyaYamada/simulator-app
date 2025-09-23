@@ -1,6 +1,37 @@
 -- 投資シミュレーションアプリケーション データベース初期化スクリプト
 -- Cloudflare D1 (SQLite) 用
 -- ============================================================================
+-- テーブル削除（開発・テスト用）
+-- ============================================================================
+-- 外部キー制約を無効化
+PRAGMA foreign_keys = OFF;
+
+-- テーブル削除（依存関係の逆順）
+DROP TABLE IF EXISTS reviews;
+DROP TABLE IF EXISTS journals;
+DROP TABLE IF EXISTS pnl_records;
+DROP TABLE IF EXISTS conditions;
+DROP TABLE IF EXISTS hypotheses;
+DROP TABLE IF EXISTS checkpoints;
+DROP TABLE IF EXISTS simulations;
+DROP TABLE IF EXISTS stock_prices;
+DROP TABLE IF EXISTS stocks;
+
+-- ビュー削除
+DROP VIEW IF EXISTS simulation_details;
+DROP VIEW IF EXISTS latest_stock_prices;
+DROP VIEW IF EXISTS active_checkpoints;
+
+-- トリガー削除
+DROP TRIGGER IF EXISTS update_stocks_updated_at;
+DROP TRIGGER IF EXISTS update_simulations_updated_at;
+DROP TRIGGER IF EXISTS update_hypotheses_updated_at;
+DROP TRIGGER IF EXISTS update_conditions_updated_at;
+
+-- 外部キー制約を再有効化
+PRAGMA foreign_keys = ON;
+
+-- ============================================================================
 -- テーブル作成
 -- ============================================================================
 -- 株式銘柄テーブル
@@ -172,287 +203,6 @@ CREATE INDEX IF NOT EXISTS idx_journals_checkpoint ON journals (checkpoint_id);
 
 CREATE INDEX IF NOT EXISTS idx_journals_date ON journals (journal_date);
 
--- ============================================================================
--- 初期データ挿入（サンプルデータ）
--- ============================================================================
--- サンプル銘柄データ
-INSERT
-OR IGNORE INTO stocks (stock_id, symbol, name, sector, industry)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440001',
-        'AAPL',
-        'Apple Inc.',
-        'Technology',
-        'Consumer Electronics'
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440002',
-        'NVDA',
-        'NVIDIA Corporation',
-        'Technology',
-        'Semiconductors'
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440003',
-        'MSFT',
-        'Microsoft Corporation',
-        'Technology',
-        'Software'
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440004',
-        'TSLA',
-        'Tesla, Inc.',
-        'Consumer Discretionary',
-        'Electric Vehicles'
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440005',
-        'GOOGL',
-        'Alphabet Inc.',
-        'Technology',
-        'Internet Services'
-    );
-
--- サンプル株価データ（AAPL）
-INSERT
-OR IGNORE INTO stock_prices (
-    stock_price_id,
-    stock_id,
-    price_date,
-    open_price,
-    close_price,
-    high_price,
-    low_price,
-    volume
-)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440101',
-        '550e8400-e29b-41d4-a716-446655440001',
-        '2024-01-15',
-        185.50,
-        187.20,
-        188.10,
-        185.20,
-        45000000
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440102',
-        '550e8400-e29b-41d4-a716-446655440001',
-        '2024-01-16',
-        187.20,
-        186.80,
-        187.50,
-        186.20,
-        42000000
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440103',
-        '550e8400-e29b-41d4-a716-446655440001',
-        '2024-01-17',
-        186.80,
-        188.50,
-        189.20,
-        186.50,
-        48000000
-    );
-
--- サンプル株価データ（NVDA）
-INSERT
-OR IGNORE INTO stock_prices (
-    stock_price_id,
-    stock_id,
-    price_date,
-    open_price,
-    close_price,
-    high_price,
-    low_price,
-    volume
-)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440201',
-        '550e8400-e29b-41d4-a716-446655440002',
-        '2024-01-15',
-        875.00,
-        880.50,
-        885.20,
-        872.30,
-        25000000
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440202',
-        '550e8400-e29b-41d4-a716-446655440002',
-        '2024-01-16',
-        880.50,
-        875.20,
-        882.10,
-        873.50,
-        22000000
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440203',
-        '550e8400-e29b-41d4-a716-446655440002',
-        '2024-01-17',
-        875.20,
-        890.30,
-        895.80,
-        874.10,
-        28000000
-    );
-
--- サンプルシミュレーションデータ
-INSERT
-OR IGNORE INTO simulations (
-    simulation_id,
-    stock_id,
-    initial_capital,
-    start_date,
-    end_date,
-    status
-)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440301',
-        '550e8400-e29b-41d4-a716-446655440002',
-        10000,
-        '2024-01-15',
-        '2024-07-15',
-        'active'
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440302',
-        '550e8400-e29b-41d4-a716-446655440001',
-        15000,
-        '2024-02-01',
-        '2024-08-01',
-        'active'
-    );
-
--- サンプルチェックポイントデータ
-INSERT
-OR IGNORE INTO checkpoints (
-    checkpoint_id,
-    simulation_id,
-    checkpoint_date,
-    checkpoint_type,
-    note
-)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440401',
-        '550e8400-e29b-41d4-a716-446655440301',
-        '2024-01-15',
-        'manual',
-        'シミュレーション開始'
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440402',
-        '550e8400-e29b-41d4-a716-446655440301',
-        '2024-02-15',
-        'manual',
-        '四半期決算後のチェック'
-    );
-
--- サンプル投資仮説データ
-INSERT
-OR IGNORE INTO hypotheses (
-    hypothesis_id,
-    checkpoint_id,
-    description,
-    is_active
-)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440501',
-        '550e8400-e29b-41d4-a716-446655440401',
-        'AI需要の急激な増加でNVDAが上昇する',
-        TRUE
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440502',
-        '550e8400-e29b-41d4-a716-446655440401',
-        'データセンター事業の成長が株価を押し上げる',
-        TRUE
-    );
-
--- サンプル売買条件データ
-INSERT
-OR IGNORE INTO conditions (
-    condition_id,
-    checkpoint_id,
-    type,
-    metric,
-    value,
-    is_active
-)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440601',
-        '550e8400-e29b-41d4-a716-446655440401',
-        'buy',
-        'price',
-        '850.00',
-        TRUE
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440602',
-        '550e8400-e29b-41d4-a716-446655440401',
-        'sell',
-        'percentage',
-        '20.0',
-        TRUE
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440603',
-        '550e8400-e29b-41d4-a716-446655440401',
-        'stop_loss',
-        'percentage',
-        '-10.0',
-        TRUE
-    );
-
--- サンプル損益記録データ
-INSERT
-OR IGNORE INTO pnl_records (
-    pnl_id,
-    checkpoint_id,
-    stock_price_id,
-    position_size,
-    realized_pl,
-    unrealized_pl
-)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440701',
-        '550e8400-e29b-41d4-a716-446655440401',
-        '550e8400-e29b-41d4-a716-446655440201',
-        11.43,
-        0.00,
-        62.50
-    );
-
--- サンプル投資日記データ
-INSERT
-OR IGNORE INTO journals (
-    journal_id,
-    simulation_id,
-    checkpoint_id,
-    title,
-    content,
-    journal_date
-)
-VALUES
-    (
-        '550e8400-e29b-41d4-a716-446655440801',
-        '550e8400-e29b-41d4-a716-446655440301',
-        '550e8400-e29b-41d4-a716-446655440401',
-        'シミュレーション開始',
-        'AI需要の増加を見込んでNVDAのシミュレーションを開始。初期資本10,000円で11.43株を購入。',
-        '2024-01-15'
-    );
 
 -- ============================================================================
 -- ビュー作成（便利なクエリ用）

@@ -24,6 +24,13 @@ export function NewSimulationModal({
   
   // 株価情報取得用
   const stockInfoFetcher = useFetcher();
+  
+  // シミュレーション作成用
+  const simulationFetcher = useFetcher();
+  
+  // シミュレーション設定用の状態
+  const [initialCapital, setInitialCapital] = useState(1000000); // デフォルト100万円
+  const [simulationPeriod, setSimulationPeriod] = useState(3); // デフォルト3ヶ月
 
   // 株価情報取得結果の処理
   useEffect(() => {
@@ -33,6 +40,16 @@ export function NewSimulationModal({
       setIndustry(stockData.industry || stockData.sector || "");
     }
   }, [stockInfoFetcher.data]);
+
+  // シミュレーション作成結果の処理
+  useEffect(() => {
+    if (simulationFetcher.data && !simulationFetcher.data.error) {
+      alert(`シミュレーションが作成されました！\nシミュレーションID: ${simulationFetcher.data.simulationId}`);
+      handleClose();
+    } else if (simulationFetcher.data && simulationFetcher.data.error) {
+      alert(`エラー: ${simulationFetcher.data.error}`);
+    }
+  }, [simulationFetcher.data]);
 
   if (!isOpen) return null;
 
@@ -45,6 +62,8 @@ export function NewSimulationModal({
     setTickerSymbol("");
     setCompanyName("");
     setIndustry("");
+    setInitialCapital(1000000);
+    setSimulationPeriod(3);
     onClose();
   };
 
@@ -67,6 +86,29 @@ export function NewSimulationModal({
   const handleSelectSimulationType = (type: 'ai-screening' | 'preset-stock') => {
     setSimulationType(type);
     setCurrentStep(type === 'ai-screening' ? 1 : 2);
+  };
+
+  const handleStartSimulation = () => {
+    if (!tickerSymbol || !stockInfoFetcher.data) {
+      alert("銘柄情報が取得できていません");
+      return;
+    }
+
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + simulationPeriod);
+
+    // FormDataとして明示的に送信
+    const formData = new FormData();
+    formData.append("symbol", tickerSymbol.toUpperCase());
+    formData.append("initialCapital", initialCapital.toString());
+    formData.append("startDate", startDate.toISOString().split('T')[0]);
+    formData.append("endDate", endDate.toISOString().split('T')[0]);
+
+    simulationFetcher.submit(formData, {
+      method: "POST",
+      action: "/api/simulations"
+    });
   };
 
   // ティッカーシンボル変更時の処理
@@ -649,6 +691,115 @@ export function NewSimulationModal({
                         </div>
                       </div>
                     )}
+                    
+                    {/* シミュレーション設定フォーム */}
+                    <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                      <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-4">
+                        🎯 シミュレーション設定
+                      </h4>
+                      
+                      <div className="space-y-4">
+                        {/* 初期資本設定 */}
+                        <div>
+                          <label className="block text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
+                            初期資本
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={initialCapital}
+                              onChange={(e) => setInitialCapital(Number(e.target.value))}
+                              className="w-full px-3 py-2 border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              min="1000"
+                              step="1000"
+                            />
+                            <span className="absolute right-3 top-2 text-blue-600 dark:text-blue-400 text-sm">
+                              円
+                            </span>
+                          </div>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            投資可能な上限金額を設定してください
+                          </p>
+                        </div>
+
+                        {/* 投資期間設定 */}
+                        <div>
+                          <label className="block text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
+                            投資期間
+                          </label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSimulationPeriod(1)}
+                              className={`px-3 py-2 text-sm rounded-md ${
+                                simulationPeriod === 1
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-600'
+                              }`}
+                            >
+                              1ヶ月
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSimulationPeriod(3)}
+                              className={`px-3 py-2 text-sm rounded-md ${
+                                simulationPeriod === 3
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-600'
+                              }`}
+                            >
+                              3ヶ月
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSimulationPeriod(6)}
+                              className={`px-3 py-2 text-sm rounded-md ${
+                                simulationPeriod === 6
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-600'
+                              }`}
+                            >
+                              6ヶ月
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSimulationPeriod(12)}
+                              className={`px-3 py-2 text-sm rounded-md ${
+                                simulationPeriod === 12
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-600'
+                              }`}
+                            >
+                              1年
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* シミュレーション開始ボタン */}
+                        <div className="pt-4 border-t border-blue-200 dark:border-blue-700">
+                          <button
+                            type="button"
+                            onClick={handleStartSimulation}
+                            disabled={simulationFetcher.state === "submitting"}
+                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-3 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2"
+                          >
+                            {simulationFetcher.state === "submitting" ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                シミュレーション作成中...
+                              </>
+                            ) : (
+                              <>
+                                🚀 シミュレーション開始
+                              </>
+                            )}
+                          </button>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 text-center">
+                            初期チェックポイントが自動作成されます
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
