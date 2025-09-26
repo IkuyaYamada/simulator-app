@@ -1,9 +1,9 @@
 import React from "react";
+import { formatToJSTDateOnly } from "../../utils/date";
 
 interface ActiveSimulation {
   simulation_id: string;
-  stock_id: string;
-  symbol: string;
+  symbol: string; // PRIMARY KEYより直接的な参照
   stock_name: string;
   sector: string;
   initial_capital: number;
@@ -118,9 +118,7 @@ export function ActiveSimulations({ simulations }: ActiveSimulationsProps) {
                       最終チェック:
                     </span>
                     <span className="ml-1 text-gray-900 dark:text-gray-100">
-                      {new Date(sim.last_checkpoint_date).toLocaleDateString(
-                        "ja-JP"
-                      )}
+                      {formatToJSTDateOnly(sim.last_checkpoint_date)}
                     </span>
                   </div>
                   <span

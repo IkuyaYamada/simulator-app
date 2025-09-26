@@ -1,5 +1,6 @@
 import { useLoaderData, Link, useFetcher } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import { formatToJST, formatToJSTDateOnly, formatCurrency } from "../utils/date";
 
 export async function loader({ context }: LoaderFunctionArgs) {
   try {
@@ -8,17 +9,17 @@ export async function loader({ context }: LoaderFunctionArgs) {
     const simulations = await db.prepare(`
       SELECT 
         s.simulation_id,
+        s.symbol,
         s.initial_capital,
         s.start_date,
         s.end_date,
         s.status,
         s.created_at,
-        st.symbol,
         st.name as stock_name,
         st.sector,
         st.industry
       FROM simulations s
-      JOIN stocks st ON s.stock_id = st.stock_id
+      JOIN stocks st ON s.symbol = st.symbol
       ORDER BY s.created_at DESC
     `).all();
 
@@ -74,22 +75,8 @@ export default function SimulationsPage() {
     );
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ja-JP', {
-      style: 'currency',
-      currency: 'JPY',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-  };
+  const formatDate = formatToJSTDateOnly;
 
   const calculateDaysRemaining = (endDate: string) => {
     const end = new Date(endDate);
@@ -252,7 +239,7 @@ export default function SimulationsPage() {
                   {/* 作成日時 */}
                   <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      作成: {new Date(simulation.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+                      作成: {formatToJST(simulation.created_at)}
                     </p>
                   </div>
                 </div>

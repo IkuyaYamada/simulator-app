@@ -40,25 +40,19 @@ export async function loader({ request }: { request: Request }) {
     const closes = indicators.close || [];
 
     // チャートデータを整理（日足データ）
-    const chartData = timestamps.map((timestamp: number, index: number) => ({
-      date: new Date(timestamp * 1000).toLocaleDateString('ja-JP', { 
-        month: '2-digit', 
-        day: '2-digit',
-        timeZone: 'Asia/Tokyo'
-      }),
-      fullDate: new Date(timestamp * 1000).toLocaleDateString('ja-JP', {
-        year: 'numeric',
-        month: '2-digit', 
-        day: '2-digit',
-        timeZone: 'Asia/Tokyo'
-      }),
-      timestamp: timestamp,
-      open: opens[index] || null,
-      high: highs[index] || null,
-      low: lows[index] || null,
-      close: closes[index] || null,
-      volume: volumes[index] || 0
-    }));
+    const chartData = timestamps.map((timestamp: number, index: number) => {
+      const date = new Date(timestamp * 1000);
+      return {
+        date: date.toISOString().split('T')[0], // YYYY-MM-DD形式
+        fullDate: date.toISOString().split('T')[0], // YYYY-MM-DD形式
+        timestamp: timestamp,
+        open: opens[index] || null,
+        high: highs[index] || null,
+        low: lows[index] || null,
+        close: closes[index] || null,
+        volume: volumes[index] || 0
+      };
+    });
 
     
     // 日付・時刻の処理

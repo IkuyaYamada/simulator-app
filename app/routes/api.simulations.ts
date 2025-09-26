@@ -45,18 +45,18 @@ async function createSimulation(request: Request, context: any) {
 
     const db = context.cloudflare.env.simulator_app_db;
 
-    // 1. Stock テーブルから既存の銘柄を確認
-    let stockResult = await db.prepare(`
-      SELECT stock_id FROM stocks WHERE symbol = ?
-    `).bind(symbol).first();
+    // 1. Stock テーブルから既存の銘柄を確認（symbolは primary key）
+    let existingStock = await db.prepare(`
+      SELECT * FROM stocks WHERE symbol = ?
+    `).bind(symbol.toUpperCase()).first();
 
-    let stockId;
-    if (stockResult) {
-      stockId = stockResult.stock_id;
-    } else {
+    if (!existingStock) {
       // 2. 新しい銘柄の場合、内部APIを呼び出して株価情報を取得
       try {
-        const stockInfoResponse = await fetch(`/api/stock-info?symbol=${symbol}`);
+        // 内部APIを呼び出し - ベースURLをrequestから取得
+        const baseUrl = new URL(request.url).origin;
+        const stockInfoResponse = await fetch(`${baseUrl}/api/stock-info?symbol=${symbol}`);
+        
         if (!stockInfoResponse.ok) {
           throw new Error(`Failed to fetch stock info: ${stockInfoResponse.status}`);
         }
@@ -67,14 +67,11 @@ async function createSimulation(request: Request, context: any) {
           sector?: string;
           industry?: string;
         };
-        
-        stockId = crypto.randomUUID();
 
         await db.prepare(`
-          INSERT INTO stocks (stock_id, symbol, name, sector, industry)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO stocks (symbol, name, sector, industry)
+          VALUES (?, ?, ?, ?)
         `).bind(
-          stockId,
           symbol.toUpperCase(),
           stockInfo.longName || stockInfo.shortName || symbol.toUpperCase(),
           stockInfo.sector || "不明",
@@ -83,12 +80,10 @@ async function createSimulation(request: Request, context: any) {
       } catch (error) {
         console.error("Failed to fetch stock info:", error);
         // フォールバック: 基本的な情報で保存
-        stockId = crypto.randomUUID();
         await db.prepare(`
-          INSERT INTO stocks (stock_id, symbol, name, sector, industry)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO stocks (symbol, name, sector, industry)
+          VALUES (?, ?, ?, ?)
         `).bind(
-          stockId,
           symbol.toUpperCase(),
           symbol.toUpperCase(),
           "不明",
@@ -97,22 +92,37 @@ async function createSimulation(request: Request, context: any) {
       }
     }
 
-    // 3. Simulation テーブルに新規レコード作成
+    // 3. Simulation テーブルに新規レコード作成（明示的UTC保存）
     const simulationId = crypto.randomUUID();
+    const nowUTC = new Date().toISOString(); // UTC時刻を明示的取得
     await db.prepare(`
-      INSERT INTO simulations (simulation_id, stock_id, initial_capital, start_date, end_date, status)
-      VALUES (?, ?, ?, ?, ?, 'active')
+      INSERT INTO simulations (simulation_id, symbol, initial_capital, start_date, end_date, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
     `).bind(
       simulationId,
-      stockId,
+      symbol.toUpperCase(),
       initialCapital,
       startDate,
-      endDate
+      endDate,
+      nowUTC,
+      nowUTC
+    ).run();
+
+    // 4. 最初のチェックポイント（チェックポイントゼロ）を自動作成（明示的UTC保存）
+    const checkpointId = crypto.randomUUID();
+    await db.prepare(`
+      INSERT INTO checkpoints (checkpoint_id, simulation_id, checkpoint_date, checkpoint_type, note, created_at)
+      VALUES (?, ?, ?, 'initial', 'シミュレーション開始時の初期チェックポイント', ?)
+    `).bind(
+      checkpointId,
+      simulationId,
+      startDate,
+      nowUTC
     ).run();
 
     return Response.json({
       simulationId,
-      stockId,
+      symbol: symbol.toUpperCase(),
       status: "created"
     });
 
@@ -201,17 +211,17 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const simulations = await db.prepare(`
       SELECT 
         s.simulation_id,
+        s.symbol,
         s.initial_capital,
         s.start_date,
         s.end_date,
         s.status,
         s.created_at,
-        st.symbol,
         st.name as stock_name,
         st.sector,
         st.industry
       FROM simulations s
-      JOIN stocks st ON s.stock_id = st.stock_id
+      JOIN stocks st ON s.symbol = st.symbol
       ORDER BY s.created_at DESC
     `).all();
 

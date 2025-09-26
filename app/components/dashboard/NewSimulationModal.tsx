@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useFetcher } from "react-router";
-import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Bar } from 'recharts';
+import ReactECharts from 'echarts-for-react';
 
 interface NewSimulationModalProps {
   isOpen: boolean;
@@ -595,82 +595,105 @@ export function NewSimulationModal({
                           📈 過去100日間の価格推移
                         </h5>
                         <div style={{ width: '100%', height: '250px' }}>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={stockInfoFetcher.data.chartData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                              <XAxis 
-                                dataKey="date" 
-                                stroke="#6b7280"
-                                fontSize={11}
-                                tickCount={6}
-                              />
-              <YAxis 
-                stroke="#6b7280"
-                fontSize={11}
-                domain={['dataMin - 2', 'dataMax + 2']}
-                tickFormatter={(value) => {
-                  const currency = stockInfoFetcher.data.currency || 'USD';
-                  const symbol = currency === 'JPY' ? '¥' : '$';
-                  return `${symbol}${value?.toFixed(0)}`;
-                }}
-              />
-                              <Tooltip 
-                                contentStyle={{
-                                  backgroundColor: '#f9fafb',
-                                  border: '1px solid #d1d5db',
-                                  borderRadius: '6px',
+                          <ReactECharts 
+                            key={`menu-chart-${stockInfoFetcher.data?.symbol}`}
+                            notMerge={true}
+                            option={{
+                              // パフォーマンス向上のレンダリング設定
+                              lazyUpdate: true,
+                              hoverLayerThreshold: 10000,
+                              animation: false,
+                              
+                              grid: {
+                                left: '3%',
+                                right: '4%',
+                                bottom: '3%',
+                                containLabel: true
+                              },
+                              xAxis: {
+                                type: 'category',
+                                data: stockInfoFetcher.data.chartData.map((data: any) => data.date),
+                                axisTick: {
+                                  alignWithLabel: true
+                                },
+                                splitLine: {
+                                  show: false
+                                }
+                              },
+                              yAxis: {
+                                type: 'value',
+                                scale: true,  // データに合わせて自動スケール調整
+                                minInterval: 0.01,  // 最小値間隔を設定
+                                axisLabel: {
+                                  formatter: (value: number) => {
+                                    const currency = stockInfoFetcher.data.currency || 'USD';
+                                    const symbol = currency === 'JPY' ? '¥' : '$';
+                                    return `${symbol}${value?.toFixed(2)}`;
+                                  }
+                                },
+                                splitLine: {
+                                  lineStyle: {
+                                    type: 'dashed',
+                                    color: '#e5e7eb'
+                                  }
+                                }
+                              },
+                              tooltip: {
+                                trigger: 'axis',
+                                backgroundColor: '#f9fafb',
+                                borderColor: '#d1d5db',
+                                borderWidth: 1,
+                                borderRadius: 6,
+                                textStyle: {
                                   color: '#374151',
-                                  fontSize: '12px'
-                                }}
-                                formatter={(value: number, name: string) => {
+                                  fontSize: 12
+                                },
+                                formatter: (params: any) => {
+                                  if (!Array.isArray(params)) return '';
+                                  
                                   const currency = stockInfoFetcher.data.currency || 'USD';
                                   const symbol = currency === 'JPY' ? '¥' : '$';
                                   const formatValue = (val: number) => `${symbol}${val?.toFixed(2) || 'N/A'}`;
-                                  if (name === 'high') return [formatValue(value), '高値'];
-                                  if (name === 'low') return [formatValue(value), '安値'];
-                                  if (name === 'close') return [formatValue(value), '終値'];
-                                  if (name === 'volume') return [value?.toLocaleString() || 'N/A', '出来高'];
-                                  return [formatValue(value), name];
-                                }}
-                                labelFormatter={(label, payload) => {
-                                  if (payload && payload[0]) {
-                                    const data = payload[0].payload;
-                                    return `${data.fullDate} (${label})`;
-                                  }
-                                  return label;
-                                }}
-                              />
-                              {/* ローソク足風の表示：高値・安値のライン */}
-                              <Line 
-                                type="monotone" 
-                                dataKey="high" 
-                                stroke="#ef4444" 
-                                strokeWidth={1}
-                                dot={false}
-                                connectNulls={false}
-                                name="高値"
-                              />
-                              <Line 
-                                type="monotone" 
-                                dataKey="low" 
-                                stroke="#3b82f6" 
-                                strokeWidth={1}
-                                dot={false}
-                                connectNulls={false}
-                                name="安値"
-                              />
-                              {/* 終値のライン */}
-                              <Line 
-                                type="monotone" 
-                                dataKey="close" 
-                                stroke="#10b981" 
-                                strokeWidth={2}
-                                dot={{ fill: '#10b981', strokeWidth: 2, r: 2 }}
-                                connectNulls={false}
-                                name="終値"
-                              />
-                            </ComposedChart>
-                          </ResponsiveContainer>
+                                  
+                                  const param = params[0];
+                                  const data = param.data;  // [open, close, low, high]
+                                  
+                                  let result = `<div>日付: ${param.axisValue}</div>`;
+                                  result += data ? 
+                                    `<div>開値: ${formatValue(data[0])}<br/>終値: ${formatValue(data[1])}<br/>安値: ${formatValue(data[2])}<br/>高値: ${formatValue(data[3])}</div>` :
+                                    `<div>価格: ${formatValue(param.value)}</div>`;
+                                  
+                                  return result;
+                                }
+                              },
+                              legend: {
+                                data: ['ローソク足']
+                              },
+                              series: [
+                                {
+                                  name: 'ローソク足',
+                                  type: 'candlestick',
+                                  data: stockInfoFetcher.data.chartData.map((data: any) => [
+                                      data.open || null,
+                                      data.close || null,
+                                      data.low || null,
+                                      data.high || null
+                                    ]),
+                                  itemStyle: {
+                                    color: '#ef4444',  // 赤（下落、陽線）
+                                    color0: '#10b981',  // 緑（上昇、陰線）
+                                    borderColor: '#ef4444',
+                                    borderColor0: '#10b981'
+                                  },
+                                  sampling: 'average',  // データサンプリング最適化
+                                  progressive: 100,     // プログレッシブレンダリング
+                                  progressiveChunkMode: 'mod',  // 段階的描画
+                                  animation: false      // アニメーション無効
+                                }
+                              ]
+                            }}
+                            style={{ width: '100%', height: '100%' }}
+                          />
                         </div>
                         <div className="flex justify-between items-center mt-2 text-xs text-gray-500 dark:text-gray-400">
                           <div className="flex items-center gap-4">
@@ -681,6 +704,10 @@ export function NewSimulationModal({
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-0.5 bg-blue-500"></div>
                               <span>安値</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-0.5 bg-purple-500"></div>
+                              <span>始値</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-0.5 bg-green-500"></div>

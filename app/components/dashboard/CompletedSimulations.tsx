@@ -1,4 +1,5 @@
 import React from "react";
+import { formatToJSTDateOnly } from "../../utils/date";
 
 interface CompletedSimulation {
   simulation_id: string;
@@ -85,8 +86,8 @@ export function CompletedSimulations({
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
                   {sim.sector} •{" "}
-                  {new Date(sim.start_date).toLocaleDateString("ja-JP")} -{" "}
-                  {new Date(sim.end_date).toLocaleDateString("ja-JP")}
+                  {formatToJSTDateOnly(sim.start_date)} -{" "}
+                  {formatToJSTDateOnly(sim.end_date)}
                 </p>
               </div>
               <div className="text-right ml-4">
@@ -138,7 +139,7 @@ export function CompletedSimulations({
             <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 レビュー日:{" "}
-                {new Date(sim.reviewed_at).toLocaleDateString("ja-JP")}
+                {formatToJSTDateOnly(sim.reviewed_at)}
               </span>
               <div className="flex gap-2">
                 <button className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-1 px-3 rounded text-xs transition-colors">

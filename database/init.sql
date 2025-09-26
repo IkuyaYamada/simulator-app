@@ -37,8 +37,7 @@ PRAGMA foreign_keys = ON;
 -- 株式銘柄テーブル
 CREATE TABLE
     IF NOT EXISTS stocks (
-        stock_id TEXT PRIMARY KEY, -- UUID
-        symbol TEXT NOT NULL UNIQUE, -- 銘柄コード (例: AAPL, NVDA)
+        symbol TEXT PRIMARY KEY, -- 銘柄コード (例: AAPL, NVDA) - PKに昇格
         name TEXT NOT NULL, -- 会社名
         sector TEXT, -- セクター
         industry TEXT, -- 業界
@@ -50,7 +49,7 @@ CREATE TABLE
 CREATE TABLE
     IF NOT EXISTS stock_prices (
         stock_price_id TEXT PRIMARY KEY, -- UUID
-        stock_id TEXT NOT NULL, -- 銘柄ID (FK)
+        symbol TEXT NOT NULL, -- 銘柄コード (FK to stocks.symbol)
         price_date DATE NOT NULL, -- 価格日付
         open_price DECIMAL(10, 2) NOT NULL, -- 始値
         close_price DECIMAL(10, 2) NOT NULL, -- 終値
@@ -59,22 +58,22 @@ CREATE TABLE
         volume BIGINT, -- 出来高
         last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
         is_cached BOOLEAN DEFAULT TRUE, -- キャッシュフラグ
-        FOREIGN KEY (stock_id) REFERENCES stocks (stock_id),
-        UNIQUE (stock_id, price_date)
+        FOREIGN KEY (symbol) REFERENCES stocks (symbol),
+        UNIQUE (symbol, price_date)
     );
 
 -- シミュレーションテーブル
 CREATE TABLE
     IF NOT EXISTS simulations (
         simulation_id TEXT PRIMARY KEY, -- UUID
-        stock_id TEXT NOT NULL, -- 銘柄ID (FK)
+        symbol TEXT NOT NULL, -- 銘柄コード (FK to stocks.symbol)
         initial_capital INTEGER NOT NULL, -- 初期資本
         start_date DATE NOT NULL, -- 開始日
         end_date DATE NOT NULL, -- 終了日
         status TEXT DEFAULT 'active', -- ステータス (active, completed, paused)
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (stock_id) REFERENCES stocks (stock_id)
+        FOREIGN KEY (symbol) REFERENCES stocks (symbol)
     );
 
 -- チェックポイントテーブル
@@ -159,12 +158,12 @@ CREATE TABLE
 -- インデックス作成
 -- ============================================================================
 -- 株価データのインデックス
-CREATE INDEX IF NOT EXISTS idx_stock_prices_stock_date ON stock_prices (stock_id, price_date);
+CREATE INDEX IF NOT EXISTS idx_stock_prices_symbol_date ON stock_prices (symbol, price_date);
 
 CREATE INDEX IF NOT EXISTS idx_stock_prices_date ON stock_prices (price_date);
 
 -- シミュレーションのインデックス
-CREATE INDEX IF NOT EXISTS idx_simulations_stock ON simulations (stock_id);
+CREATE INDEX IF NOT EXISTS idx_simulations_symbol ON simulations (symbol);
 
 CREATE INDEX IF NOT EXISTS idx_simulations_status ON simulations (status);
 
@@ -212,25 +211,24 @@ CREATE VIEW
     IF NOT EXISTS simulation_details AS
 SELECT
     s.simulation_id,
+    s.symbol,
     s.initial_capital,
     s.start_date,
     s.end_date,
     s.status,
-    st.symbol,
     st.name as stock_name,
     st.sector,
     st.industry,
     s.created_at
 FROM
     simulations s
-    JOIN stocks st ON s.stock_id = st.stock_id;
+    JOIN stocks st ON s.symbol = st.symbol;
 
 -- 最新株価ビュー
 CREATE VIEW
     IF NOT EXISTS latest_stock_prices AS
 SELECT
-    sp.stock_id,
-    st.symbol,
+    sp.symbol,
     st.name,
     sp.price_date,
     sp.close_price,
@@ -238,7 +236,7 @@ SELECT
     sp.last_updated
 FROM
     stock_prices sp
-    JOIN stocks st ON sp.stock_id = st.stock_id
+    JOIN stocks st ON sp.symbol = st.symbol
 WHERE
     sp.price_date = (
         SELECT
@@ -246,7 +244,7 @@ WHERE
         FROM
             stock_prices sp2
         WHERE
-            sp2.stock_id = sp.stock_id
+            sp2.symbol = sp.symbol
     );
 
 -- アクティブなチェックポイントビュー
@@ -258,13 +256,12 @@ SELECT
     c.checkpoint_date,
     c.checkpoint_type,
     c.note,
-    s.stock_id,
-    st.symbol,
+    s.symbol,
     st.name as stock_name
 FROM
     checkpoints c
     JOIN simulations s ON c.simulation_id = s.simulation_id
-    JOIN stocks st ON s.stock_id = st.stock_id
+    JOIN stocks st ON s.symbol = st.symbol
 WHERE
     s.status = 'active'
 ORDER BY
@@ -280,7 +277,7 @@ UPDATE stocks
 SET
     updated_at = CURRENT_TIMESTAMP
 WHERE
-    stock_id = NEW.stock_id;
+    symbol = NEW.symbol;
 
 END;
 
