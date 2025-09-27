@@ -42,7 +42,7 @@ export function StockChart({
   const generateTradingConditionLines = () => {
     if (!tradingConditions || tradingConditions.length === 0) return [];
     
-    const lines = [];
+    const lines: any[] = [];
     
     tradingConditions.forEach((condition, index) => {
       if (condition.type === 'sell' && condition.metric === 'price' && condition.value) {
@@ -269,10 +269,10 @@ export function StockChart({
             Number(data.high)
           ]),
         itemStyle: {
-          color: '#ef4444',
-          color0: '#10b981',
-          borderColor: '#ef4444',
-          borderColor0: '#10b981'
+          color: '#10b981',  // 緑（上昇）
+          color0: '#ef4444', // 赤（下落）
+          borderColor: '#10b981',
+          borderColor0: '#ef4444'
         }
       },
       // 移動平均線
