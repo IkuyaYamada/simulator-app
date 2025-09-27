@@ -21,11 +21,39 @@ async function createSimulation(request: Request, context: any) {
     const initialCapital = Number(formData.get("initialCapital"));
     const startDate = formData.get("startDate") as string;
     const endDate = formData.get("endDate") as string;
+    const tradingConditionsData = formData.get("tradingConditions") as string;
 
     // バリデーション
     if (!symbol || !initialCapital || !startDate || !endDate) {
       return Response.json({ 
         error: "Missing required fields: symbol, initialCapital, startDate, endDate" 
+      }, { status: 400 });
+    }
+
+    // 売買条件のバリデーション
+    if (!tradingConditionsData) {
+      return Response.json({ 
+        error: "売買条件が設定されていません" 
+      }, { status: 400 });
+    }
+
+    let tradingConditions;
+    try {
+      tradingConditions = JSON.parse(tradingConditionsData);
+    } catch (error) {
+      return Response.json({ 
+        error: "売買条件のデータ形式が正しくありません" 
+      }, { status: 400 });
+    }
+
+    // 有効な売買条件のチェック
+    const validConditions = tradingConditions.filter((condition: any) => 
+      condition.type && condition.metric && condition.value && condition.value.trim() !== ''
+    );
+
+    if (validConditions.length === 0) {
+      return Response.json({ 
+        error: "少なくとも1つの有効な売買条件を設定してください" 
       }, { status: 400 });
     }
 
@@ -119,6 +147,31 @@ async function createSimulation(request: Request, context: any) {
       startDate,
       nowUTC
     ).run();
+
+    // 5. 売買条件を初期チェックポイントに関連付けて保存
+    try {
+      // バリデーション済みの有効な売買条件を挿入
+      for (const condition of validConditions) {
+        const conditionId = crypto.randomUUID();
+        await db.prepare(`
+          INSERT INTO conditions (condition_id, checkpoint_id, type, metric, value, is_active, updated_at)
+          VALUES (?, ?, ?, ?, ?, TRUE, ?)
+        `).bind(
+          conditionId,
+          checkpointId,
+          condition.type,
+          condition.metric,
+          condition.value,
+          nowUTC
+        ).run();
+      }
+    } catch (error) {
+      console.error("Failed to save trading conditions:", error);
+      // 売買条件の保存に失敗した場合はエラーを返す
+      return Response.json({ 
+        error: "売買条件の保存に失敗しました" 
+      }, { status: 500 });
+    }
 
     return Response.json({
       simulationId,

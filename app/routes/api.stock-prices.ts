@@ -34,11 +34,33 @@ export async function action({ request, context }: ActionFunctionArgs) {
       const priceDate = new Date(date);
       if (isNaN(priceDate.getTime())) continue;
       
+      // 日付の妥当性チェック
+      const currentYear = new Date().getFullYear();
+      const dataYear = priceDate.getFullYear();
+      
+      // 2000年以前または現在年より5年先のデータは無効とする
+      if (dataYear < 2000 || dataYear > currentYear + 5) {
+        console.warn(`Invalid date detected in stock-prices API: ${date} (year: ${dataYear})`);
+        continue;
+      }
+      
       // 価格データのバリデーション
       if (
         !price.open || isNaN(price.open) || !price.close || isNaN(price.close) ||
         !price.high || isNaN(price.high) || !price.low || isNaN(price.low)
       ) continue;
+      
+      // 価格データの論理的妥当性チェック
+      if (
+        price.open <= 0 || price.close <= 0 || price.high <= 0 || price.low <= 0 ||
+        price.high < Math.max(price.open, price.close) || 
+        price.low > Math.min(price.open, price.close)
+      ) {
+        console.warn(`Invalid price data detected for date ${date}:`, {
+          open: price.open, close: price.close, high: price.high, low: price.low
+        });
+        continue;
+      }
 
       const stockPriceId = crypto.randomUUID();
       const formattedDate = priceDate.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -58,9 +80,18 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     if (insertValues.length === 0) {
       return Response.json({
-        error: "No valid price data to save"
+        error: "No valid price data to save after validation"
       }, { status: 400 });
     }
+
+    // 挿入予定のデータの日付範囲をログ出力
+    const dates = [];
+    for (let i = 2; i < insertValues.length; i += 9) {
+      dates.push(insertValues[i]);
+    }
+    const minDate = Math.min(...dates.map(d => new Date(d).getTime()));
+    const maxDate = Math.max(...dates.map(d => new Date(d).getTime()));
+    console.log(`Inserting ${insertValues.length / 9} price records for ${symbol}, date range: ${new Date(minDate).toISOString().split('T')[0]} to ${new Date(maxDate).toISOString().split('T')[0]}`);
 
     // INSERTを実行
     // 複数INSERTなので prepareのqueryを毎回使用
@@ -96,5 +127,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }, { status: 500 });
   }
 }
+
 
 

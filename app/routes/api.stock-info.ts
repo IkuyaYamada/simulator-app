@@ -41,19 +41,86 @@ export async function loader({ request }: { request: Request }) {
 
     // チャートデータを整理（日足データ）
     const chartData = timestamps.map((timestamp: number, index: number) => {
+      // Yahoo Finance APIのtimestampは秒単位なので、1000倍してミリ秒に変換
       const date = new Date(timestamp * 1000);
+      
+      // 日付の妥当性チェック
+      const currentYear = new Date().getFullYear();
+      const dataYear = date.getFullYear();
+      
+      // 2000年以前または現在年より5年先のデータは無効とする
+      if (dataYear < 2000 || dataYear > currentYear + 5) {
+        console.warn(`Invalid date detected: ${date.toISOString()} (year: ${dataYear})`);
+        return null;
+      }
+      
+      // 価格データの妥当性チェック
+      const open = opens[index];
+      const close = closes[index];
+      const high = highs[index];
+      const low = lows[index];
+      const volume = volumes[index] || 0;
+      
+      // null値や無効な価格データをチェック
+      if (open === null || close === null || high === null || low === null ||
+          open <= 0 || close <= 0 || high <= 0 || low <= 0) {
+        console.warn(`Invalid price data detected for date ${date.toISOString()}:`, {
+          open, close, high, low, volume
+        });
+        return null;
+      }
+      
+      // より厳密な価格データの整合性チェック
+      // 高値は始値・終値・安値の最大値以上である必要がある
+      // 安値は始値・終値・高値の最小値以下である必要がある
+      if (high < Math.max(open, close) || low > Math.min(open, close)) {
+        console.warn(`Price consistency error for date ${date.toISOString()}:`, {
+          open, close, high, low, volume,
+          issue: `High (${high}) should be >= max(open, close) (${Math.max(open, close)}), Low (${low}) should be <= min(open, close) (${Math.min(open, close)})`
+        });
+        return null;
+      }
+      
+      // 異常に大きな価格変動をチェック（前日比で50%以上の変動は疑わしい）
+      if (index > 0) {
+        const prevClose = closes[index - 1];
+        if (prevClose && prevClose > 0) {
+          const priceChange = Math.abs(close - prevClose) / prevClose;
+          if (priceChange > 0.5) { // 50%以上の変動
+            console.warn(`Suspicious price change for date ${date.toISOString()}:`, {
+              previousClose: prevClose,
+              currentClose: close,
+              changePercent: (priceChange * 100).toFixed(2) + '%'
+            });
+            return null;
+          }
+        }
+      }
+      
       return {
         date: date.toISOString().split('T')[0], // YYYY-MM-DD形式
         fullDate: date.toISOString().split('T')[0], // YYYY-MM-DD形式
         timestamp: timestamp,
-        open: opens[index] || null,
-        high: highs[index] || null,
-        low: lows[index] || null,
-        close: closes[index] || null,
-        volume: volumes[index] || 0
+        open: open,
+        high: high,
+        low: low,
+        close: close,
+        volume: volume
       };
-    });
+    }).filter((item: any) => item !== null); // 無効なデータを除外
 
+    // データの妥当性を最終チェック
+    if (chartData.length === 0) {
+      throw new Error("No valid chart data found after filtering");
+    }
+
+    // 日付の範囲をチェック（最新データが現在から1年以上古い場合は警告）
+    const latestDate = new Date(Math.max(...chartData.map((item: any) => new Date(item.date).getTime())));
+    const daysDiff = (new Date().getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24);
+    
+    if (daysDiff > 365) {
+      console.warn(`Latest data is ${Math.round(daysDiff)} days old: ${latestDate.toISOString()}`);
+    }
     
     // 日付・時刻の処理
     const marketTime = meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000) : new Date();

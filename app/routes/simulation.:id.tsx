@@ -2,7 +2,8 @@ import { useLoaderData, Link, useFetcher, useParams } from "react-router";
 import { useState, useEffect, useMemo } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { formatToJST } from "../utils/date";
-import ReactECharts from 'echarts-for-react';
+import { StockChart } from "../components/common/StockChart";
+import { TradingConditionsModal } from "../components/TradingConditionsModal";
 
 // データ取得API-like functions
 async function getSimulation(db: any, id: string) {
@@ -137,6 +138,9 @@ export default function SimulationDetail() {
   
   // チャートデータ用（新しい方法: stockDataと外部APIの組み合わせ）
   const [chartData, setChartData] = useState<any[]>([]);
+  
+  // チャート表示期間の状態管理
+  const [chartRange, setChartRange] = useState<'30d' | '100d'>('100d');
 
   // チェックポイントデータを静的に計算（毎回再作成を防ぐ）
   const checkpointDates = useMemo(() => {
@@ -277,53 +281,47 @@ export default function SimulationDetail() {
   }, [stockDataFetcher.data, simulation]);
 
 
-  // シミュレーション期間に基づくチャートデータフィルタリング（useMemoで最適化）
+  // チャートデータフィルタリング（選択された期間に応じて表示）
   const filteredChartData = useMemo(() => {
     if (!chartData || chartData.length === 0) return [];
-    if (!simulation || !simulation.start_date) return chartData; // フォールバック
     
-    const simulationStartDate = new Date(simulation.start_date);
-    if (isNaN(simulationStartDate.getTime())) return chartData;
-    simulationStartDate.setHours(0, 0, 0, 0);
-    
-    // 開始日の30日前から表示開始
-    const startDate = new Date(simulationStartDate);
-    startDate.setDate(startDate.getDate() - 30);
-    
-    // 開始日+3日まで表示
-    const endDate = new Date(simulationStartDate);
-    endDate.setDate(endDate.getDate() + 3);
-    endDate.setHours(23, 59, 59, 999);
-    
-    const filtered = chartData.filter(data => {
-      if (!data) return false;
+    if (chartRange === '100d') {
+      // 過去100日間の全データを表示
+      return chartData;
+    } else {
+      // 過去30日間のデータを表示
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      thirtyDaysAgo.setHours(0, 0, 0, 0);
       
-      // timestampフィールドから正確な日付を取得
-      if (data.timestamp && !isNaN(data.timestamp)) {
-        const dataDate = new Date(data.timestamp * 1000);
-        if (isNaN(dataDate.getTime())) return false;
-        return dataDate >= startDate && dataDate <= endDate;
-      }
-      
-      // fallback: date文字列からの推測
-      if (data.date) {
-        const dataDate = new Date(data.date);
-        if (isNaN(dataDate.getTime())) return false;
-        return dataDate >= startDate && dataDate <= endDate;
-      }
-      
-      // その他のフォールバック
-      if (data.fullDate) {
-        const dataDate = new Date(data.fullDate);
-        if (isNaN(dataDate.getTime())) return false;
-        return dataDate >= startDate && dataDate <= endDate;
-      }
-      
-      return false;
-    });
-    
-    return filtered;
-  }, [chartData, simulation]);
+      return chartData.filter(data => {
+        if (!data) return false;
+        
+        // timestampフィールドから正確な日付を取得
+        if (data.timestamp && !isNaN(data.timestamp)) {
+          const dataDate = new Date(data.timestamp * 1000);
+          if (isNaN(dataDate.getTime())) return false;
+          return dataDate >= thirtyDaysAgo;
+        }
+        
+        // fallback: date文字列からの推測
+        if (data.date) {
+          const dataDate = new Date(data.date);
+          if (isNaN(dataDate.getTime())) return false;
+          return dataDate >= thirtyDaysAgo;
+        }
+        
+        // その他のフォールバック
+        if (data.fullDate) {
+          const dataDate = new Date(data.fullDate);
+          if (isNaN(dataDate.getTime())) return false;
+          return dataDate >= thirtyDaysAgo;
+        }
+        
+        return false;
+      });
+    }
+  }, [chartData, chartRange]);
 
   // チャートデータとチェックポイントマーカーの統合（useMemoで最適化）
   const chartDataWithMarkers = useMemo(() => {
@@ -439,6 +437,18 @@ export default function SimulationDetail() {
     conditions: []
   });
 
+  // 売買条件モーダルの状態
+  const [showTradingConditionsModal, setShowTradingConditionsModal] = useState(false);
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
+  const [tradingConditions, setTradingConditions] = useState<any[]>([]);
+
+  // 売却条件を設定
+  useEffect(() => {
+    if (conditions && Array.isArray(conditions)) {
+      setTradingConditions(conditions);
+    }
+  }, [conditions]);
+
   // シミュレーション編集モーダルの状態
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<{
@@ -531,6 +541,18 @@ export default function SimulationDetail() {
     }));
   };
 
+  // 売買条件モーダルを開く
+  const openTradingConditionsModal = (checkpointId?: string) => {
+    setSelectedCheckpointId(checkpointId || null);
+    setShowTradingConditionsModal(true);
+  };
+
+  // 売買条件モーダルを閉じる
+  const closeTradingConditionsModal = () => {
+    setShowTradingConditionsModal(false);
+    setSelectedCheckpointId(null);
+  };
+
   // 投資仮説の削除
   const removeHypothesis = (index: number) => {
     setCheckpointForm((prev: typeof checkpointForm) => ({
@@ -546,9 +568,9 @@ export default function SimulationDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-4">
         {/* ヘッダー */}
-        <div className="mb-8">
+        <div className="mb-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-4">
               <Link 
@@ -556,12 +578,6 @@ export default function SimulationDetail() {
                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 ← ホームに戻る
-              </Link>
-              <Link 
-                to="/simulations" 
-                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                ← シミュレーション一覧に戻る
               </Link>
             </div>
             <button
@@ -578,7 +594,7 @@ export default function SimulationDetail() {
         </div>
 
         {/* シミュレーション基本情報 */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4">
           <div className="flex justify-between items-start mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
             基本情報
@@ -591,83 +607,21 @@ export default function SimulationDetail() {
             </button>
           </div>
           
-          {/* 銘柄基本情報の詳細表示（静的データのみ） */}
-          {stockInfo && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
-              <div className="flex justify-between items-start mb-3">
-                <h3 className="font-medium text-green-900 dark:text-green-100 text-lg">
-                  📊 銘柄情報
-                </h3>
-                <div className="text-xs text-green-600 dark:text-green-400">
-                  <p>銘柄コード: {simulation.symbol}</p>
-                  <p>データベース取得</p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
-                {/* 基本情報 */}
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-green-700 dark:text-green-300 font-medium text-sm">ティッカーシンボル</p>
-                    <p className="text-green-900 dark:text-green-100 font-bold text-lg">
-                      {stockInfo.symbol || simulation.symbol}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-green-700 dark:text-green-300 font-medium text-sm">会社名</p>
-                    <p className="text-green-900 dark:text-green-100 font-bold">
-                      {stockInfo.name || simulation.stock_name || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-green-700 dark:text-green-300 font-medium text-sm">業界</p>
-                    <p className="text-green-900 dark:text-green-100">
-                      {stockInfo.industry || stockInfo.sector || simulation.industry || 'N/A'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 価格情報（静的データベース情報のみ） */}
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-green-700 dark:text-green-300 font-medium text-sm">データベース取得済みデータ</p>
-                    <p className="text-green-900 dark:text-green-100 font-bold">
-                      株価チャートデータが表示されています
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      {stockData && stockData.prices ? `${stockData.prices.length}件のデータ` : 'データなし'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 基本的な情報 */}
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-green-700 dark:text-green-300 font-medium text-sm">データ取得方法</p>
-                    <p className="text-green-900 dark:text-green-100">
-                      データベース（{stockInfo.currency}）
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                銘柄コード
+                会社名
               </label>
               <p className="text-lg text-gray-900 dark:text-white">
-                {simulation.symbol}
+                {stockInfo?.name || simulation.stock_name || 'N/A'}
               </p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                初期資本
+                シンボル
               </label>
               <p className="text-lg text-gray-900 dark:text-white">
-                ¥{simulation.initial_capital?.toLocaleString()}
+                {simulation.symbol}
               </p>
             </div>
             <div>
@@ -680,14 +634,6 @@ export default function SimulationDetail() {
             </div>
             <div>
               <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                終了日
-              </label>
-              <p className="text-lg text-gray-900 dark:text-white">
-                {simulation.end_date}
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
                 ステータス
               </label>
               <p className="text-lg text-gray-900 dark:text-white">
@@ -696,10 +642,18 @@ export default function SimulationDetail() {
             </div>
             <div>
               <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                作成日時
+                チャート
               </label>
               <p className="text-lg text-gray-900 dark:text-white">
-                {formatToJST(simulation.created_at)}
+                過去{chartRange === '30d' ? '30' : '100'}日間
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                初期資本
+              </label>
+              <p className="text-lg text-gray-900 dark:text-white">
+                ¥{simulation.initial_capital?.toLocaleString()}
               </p>
             </div>
           </div>
@@ -707,48 +661,73 @@ export default function SimulationDetail() {
 
         {/* 株価チャート（静的データベース情報のみ） */}
         {chartData && chartData.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                📈 株価チャート {simulation?.start_date && filteredChartData.length > 0 ? `(-30日〜${simulation.start_date} +3日間)` : ''}
+                📈 株価チャート (過去{chartRange === '30d' ? '30' : '100'}日間)
               </h2>
-            </div>
-
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-              <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-3 text-sm">
-                📊 データベース情報
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <p className="text-blue-700 dark:text-blue-300 font-medium">データ件数</p>
-                  <p className="text-blue-900 dark:text-blue-100 font-bold text-lg">
-                    {chartData.length}件
-                  </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    データベースから取得
-                  </p>
-                </div>
-                <div>
-                  <p className="text-blue-700 dark:text-blue-300 font-medium">銘柄コード</p>
-                  <p className="text-blue-900 dark:text-blue-100 font-bold text-lg">
-                    {simulation.symbol}
-                  </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    シミュレーション対象
-                  </p>
-                </div>
-                <div>
-                  <p className="text-blue-700 dark:text-blue-300 font-medium">期間</p>
-                  <p className="text-blue-900 dark:text-blue-100">
-                    {simulation.start_date} から分析可能
-                  </p>
-                </div>
+              
+              {/* 期間選択ボタン */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setChartRange('30d')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    chartRange === '30d'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  30日
+                </button>
+                <button
+                  onClick={() => setChartRange('100d')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    chartRange === '100d'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  100日
+                </button>
               </div>
             </div>
 
+
             {/* チャート表示切替ボタン削除 - ローソク足固定 */}
 
-            <div style={{ width: '100%', height: '400px' }}>
+            <div style={{ width: '100%', height: '600px' }}>
+              {(() => {
+                const currentChartData = chartDataWithMarkers.length > 0 ? chartDataWithMarkers : (filteredChartData.length > 0 ? filteredChartData : chartData);
+                
+                if (!currentChartData || currentChartData.length === 0) {
+                  return <div>データなし</div>;
+                }
+                
+                // データを共通コンポーネント用の形式に変換
+                const transformedData = currentChartData.map((data: any) => ({
+                  date: data.date || data.fullDate || (data.timestamp ? new Date(data.timestamp * 1000).toISOString().split('T')[0] : ''),
+                  open: Number(data.open) || 0,
+                  high: Number(data.high) || 0,
+                  low: Number(data.low) || 0,
+                  close: Number(data.close) || 0,
+                  volume: Number(data.volume) || 0,
+                  ma5: data.ma5,
+                  ma10: data.ma10,
+                  ma20: data.ma20,
+                  ma30: data.ma30
+                })).filter(data => data.open > 0 && data.close > 0 && data.high > 0 && data.low > 0);
+                
+                return (
+                  <StockChart 
+                    chartData={transformedData}
+                    currency={stockInfo?.currency || 'USD'}
+                    height="600px"
+                    tradingConditions={tradingConditions}
+                    symbol={stockInfo?.symbol}
+                  />
+                );
+              })()}
+              {/* 旧チャートコードは一時的にコメントアウト
               <ReactECharts 
                 key={`candlestick-${id}`}
                 notMerge={true}
@@ -788,8 +767,19 @@ export default function SimulationDetail() {
                           const high = Number(data.high) || 0;
                           const volume = Number(data.volume) || 0;
                           
-                          values.push([open, close, low, high]);
-                          volumns.push(volume);
+                          // データの整合性チェック
+                          if (open > 0 && close > 0 && low > 0 && high > 0) {
+                            // 価格の整合性チェック（高値 >= max(始値,終値), 安値 <= min(始値,終値)）
+                            if (high >= Math.max(open, close) && low <= Math.min(open, close)) {
+                              values.push([open, close, low, high]);
+                              volumns.push(volume);
+                            } else {
+                              console.warn(`Invalid candlestick data for ${date}:`, {
+                                open, close, high, low,
+                                issue: `High (${high}) should be >= max(open, close) (${Math.max(open, close)}), Low (${low}) should be <= min(open, close) (${Math.min(open, close)})`
+                              });
+                            }
+                          }
                         }
                       }
                     }
@@ -893,13 +883,14 @@ export default function SimulationDetail() {
                       {
                         left: '10%',
                         right: '8%',
+                        top: '15%',
                         height: '50%'
                       },
                       {
                         left: '10%',
                         right: '8%',
-                        bottom: '20%',
-                        height: '15%'
+                        bottom: '12%',
+                        height: '18%'
                       }
                     ],
                     xAxis: [
@@ -966,7 +957,7 @@ export default function SimulationDetail() {
                       {
                         type: 'inside',
                         xAxisIndex: [0, 1],
-                        start: 98,
+                        start: 70,
                         end: 100,
                         zoomOnMouseWheel: false,
                         moveOnMouseMove: true,
@@ -976,8 +967,8 @@ export default function SimulationDetail() {
                         show: true,
                         xAxisIndex: [0, 1],
                         type: 'slider',
-                        top: '85%',
-                        start: 98,
+                        bottom: 5,
+                        start: 70,
                         end: 100,
                         zoomOnMouseWheel: false,
                         moveOnMouseWheel: false
@@ -997,7 +988,7 @@ export default function SimulationDetail() {
                       extraCssText: 'width: 170px'
                     },
                     legend: {
-                      bottom: 10,
+                      top: 10,
                       left: 'center',
                       data: ['ローソク足', 'MA5', 'MA10', 'MA20', 'MA30', '取引高']
                     },
@@ -1019,8 +1010,8 @@ export default function SimulationDetail() {
                               '日付: ' + datum.name + '<hr size=1 style="margin: 3px 0">',
                               '始値: ' + datum.data[0] + '<br/>',
                               '終値: ' + datum.data[1] + '<br/>',
-                              '安値: ' + datum.data[2] + '<br/>',
-                              '高値: ' + datum.data[3] + '<br/>'
+                              '高値: ' + datum.data[3] + '<br/>',
+                              '安値: ' + datum.data[2] + '<br/>'
                             ].join('');
                           }
                         }
@@ -1098,43 +1089,33 @@ export default function SimulationDetail() {
                 })()}
                 style={{ width: '100%', height: '100%' }}
               />
+              */}
             </div>
 
-            {/* 凡例とチャート詳細情報 */}
-            <div className="flex justify-between items-center mt-2 text-xs text-gray-500 dark:text-gray-400">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-green-400 mr-1"></div>
-                  <span>ローソク足 (上昇緑・下落赤)</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div 
-                    className="w-0.5 h-4 border-l-2 border-orange-500"
-                    style={{
-                      borderStyle: 'dashed'
-                    }}
-                  ></div>
-                  <span>📌 チェックポイント ({checkpointCount}日)</span>
-                </div>
-              </div>
-              <span>※ 過去100日間の日足データ | クリックして詳細を表示</span>
-            </div>
             
           </div>
         )}
 
         {/* チェックポイント一覧 */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               チェックポイント ({checkpoints.length})
             </h2>
-            <button
-              onClick={() => setShowCheckpointModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-            >
-              チェックポイントを作成
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => openTradingConditionsModal()}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+              >
+                📊 売買条件設定
+              </button>
+              <button
+                onClick={() => setShowCheckpointModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+              >
+                チェックポイントを作成
+              </button>
+            </div>
           </div>
           {checkpoints.length > 0 ? (
             <div className="space-y-4">
@@ -1176,6 +1157,16 @@ export default function SimulationDetail() {
                       {checkpoint.note}
                     </p>
                   )}
+                  
+                  {/* 売買条件ボタン */}
+                  <div className="mt-3">
+                    <button
+                      onClick={() => openTradingConditionsModal(checkpoint.checkpoint_id)}
+                      className="bg-green-100 hover:bg-green-200 text-green-800 dark:bg-green-900 dark:hover:bg-green-800 dark:text-green-200 px-3 py-1 rounded-md text-sm font-medium transition-colors"
+                    >
+                      📊 売買条件を設定
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1187,7 +1178,7 @@ export default function SimulationDetail() {
         </div>
 
         {/* 売買条件一覧 */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             現在の売買条件 ({conditions.length})
           </h2>
@@ -1552,6 +1543,16 @@ export default function SimulationDetail() {
           </div>
         </div>
       )}
+
+      {/* 売買条件モーダル */}
+      <TradingConditionsModal
+        isOpen={showTradingConditionsModal}
+        onClose={closeTradingConditionsModal}
+        simulationId={id || ''}
+        checkpointId={selectedCheckpointId || undefined}
+        existingConditions={tradingConditions}
+        stockData={simulation?.stock_info}
+      />
     </div>
   );
 }
