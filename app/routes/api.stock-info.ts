@@ -9,12 +9,21 @@ export async function loader({ request }: { request: Request }) {
   try {
     
     const symbolUpper = symbol.toUpperCase();
+    
+    // 日本株の場合、Yahoo Finance API用にシンボルを調整
+    // 4桁の数字の場合は日本株とみなして .T を付加
+    let yahooSymbol = symbolUpper;
+    if (/^\d{4}$/.test(symbolUpper)) {
+      yahooSymbol = `${symbolUpper}.T`;
+      console.log(`Japanese stock detected: ${symbolUpper} -> ${yahooSymbol}`);
+    }
+    
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     };
 
     // チャート情報を取得（100日間の日足データ）
-    const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbolUpper}?range=100d&interval=1d`;
+    const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=100d&interval=1d`;
     
     const chartResponse = await fetch(chartUrl, { headers });
     if (!chartResponse.ok) {
