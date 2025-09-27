@@ -42,7 +42,7 @@ export function StockChart({
   const generateTradingConditionLines = () => {
     if (!tradingConditions || tradingConditions.length === 0) return [];
     
-    const lines = [];
+    const lines: any[] = [];
     
     tradingConditions.forEach((condition, index) => {
       if (condition.type === 'sell' && condition.metric === 'price' && condition.value) {

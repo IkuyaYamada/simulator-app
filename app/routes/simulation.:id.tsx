@@ -141,6 +141,9 @@ export default function SimulationDetail() {
   
   // チャート表示期間の状態管理
   const [chartRange, setChartRange] = useState<'30d' | '100d'>('100d');
+  
+  // 外部API呼び出しの制御フラグ（無限ループ防止）
+  const [hasTriedExternalApi, setHasTriedExternalApi] = useState(false);
 
   // チェックポイントデータを静的に計算（毎回再作成を防ぐ）
   const checkpointDates = useMemo(() => {
@@ -189,10 +192,11 @@ export default function SimulationDetail() {
       }).filter((item: any) => item !== null); // 無効なデータを除外
       
       setChartData(formattedPrices.reverse()); // 時系列順に並び替え
-    } else if (simulation && simulation.symbol && (!stockData || !stockData.prices || stockData.prices.length === 0)) {
+    } else if (simulation && simulation.symbol && (!stockData || !stockData.prices || stockData.prices.length === 0) && !hasTriedExternalApi) {
       // データベースにデータがない場合、外部APIから取得してデータベースに保存
       console.log('データベースから株価データが見つからないため、外部APIから取得します:', simulation.symbol);
       
+      setHasTriedExternalApi(true); // フラグを設定して重複呼び出しを防止
       stockDataFetcher.load(`/api/stock-info?symbol=${simulation.symbol}`);
     }
     
@@ -206,7 +210,7 @@ export default function SimulationDetail() {
         currency: 'JPY' // 日本市場を想定
       });
     }
-  }, [stockData, simulation, stockDataFetcher]);
+  }, [stockData, simulation, stockDataFetcher, hasTriedExternalApi]);
   
   // 外部APIから取得したデータを処理・データベースに保存
   useEffect(() => {
@@ -228,11 +232,13 @@ export default function SimulationDetail() {
         }).then(response => {
           if (response.ok) {
             console.log('株価データをデータベースに保存しました');
-            // ページを再読み込みしてデータベースから最新データを取得
-            window.location.reload();
+            // データベースに保存完了後、外部APIのデータを表示データに設定
+            // (ページリロードではなく直接状態を更新)
           } else {
             console.error('株価データの保存に失敗しました');
           }
+        }).catch(error => {
+          console.error('株価データの保存でエラーが発生しました:', error);
         });
         
         // 外部APIから取得したデータをチャートに一時的に表示

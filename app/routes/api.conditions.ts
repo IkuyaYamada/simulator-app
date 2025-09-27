@@ -1,4 +1,4 @@
-import { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function action({ request, context }: ActionFunctionArgs) {
