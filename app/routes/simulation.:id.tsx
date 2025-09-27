@@ -271,7 +271,9 @@ export default function SimulationDetail() {
         setChartData(validChartData);
         setStockInfo({
           symbol: simulation.symbol,
-          name: simulation.stock_name || simulation.symbol,
+          name: stockDataFetcher.data.longName || stockDataFetcher.data.shortName || simulation.stock_name || simulation.symbol,
+          sector: stockDataFetcher.data.sector || '不明',
+          industry: stockDataFetcher.data.industry || '不明',
           currency: 'JPY'
         });
       } catch (error) {
