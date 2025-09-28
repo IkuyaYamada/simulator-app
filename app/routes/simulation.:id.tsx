@@ -189,9 +189,11 @@ export default function SimulationDetail() {
       }).filter((item: any) => item !== null); // 無効なデータを除外
       
       setChartData(formattedPrices.reverse()); // 時系列順に並び替え
-    } else if (simulation && simulation.symbol && (!stockData || !stockData.prices || stockData.prices.length === 0)) {
-      // データベースにデータがない場合、外部APIから取得してデータベースに保存
-      console.log('データベースから株価データが見つからないため、外部APIから取得します:', simulation.symbol);
+    } else if (simulation && simulation.symbol && 
+               ((!stockData || !stockData.prices || stockData.prices.length === 0) || 
+                (!stockData.stock || !stockData.stock.name || stockData.stock.name === simulation.symbol || stockData.stock.name.length <= 10))) {
+      // データベースにデータがない場合、または会社名が不適切な場合、外部APIから取得してデータベースに保存
+      console.log('外部APIから株価・会社名情報を取得します:', simulation.symbol);
       
       stockDataFetcher.load(`/api/stock-info?symbol=${simulation.symbol}`);
     }
@@ -279,6 +281,23 @@ export default function SimulationDetail() {
       } catch (error) {
         console.error('株価データの処理に失敗しました:', error);
       }
+    }
+  }, [stockDataFetcher.data, simulation]);
+
+  // 外部APIから取得した会社名情報でstockInfoを更新（チャートデータに関係なく）
+  useEffect(() => {
+    if (stockDataFetcher.data && !stockDataFetcher.data.error && 
+        (stockDataFetcher.data.longName || stockDataFetcher.data.shortName)) {
+      console.log('外部APIから取得した会社名情報でstockInfoを更新:', stockDataFetcher.data.longName || stockDataFetcher.data.shortName);
+      
+      setStockInfo(prev => ({
+        ...prev,
+        symbol: simulation.symbol,
+        name: stockDataFetcher.data.longName || stockDataFetcher.data.shortName || prev?.name || simulation.stock_name || simulation.symbol,
+        sector: stockDataFetcher.data.sector || prev?.sector || '不明',
+        industry: stockDataFetcher.data.industry || prev?.industry || '不明',
+        currency: 'JPY'
+      }));
     }
   }, [stockDataFetcher.data, simulation]);
 
