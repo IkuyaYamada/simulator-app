@@ -11,12 +11,21 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 async function fetchAndSaveStockData(request: Request, context: any) {
   try {
+    console.log('fetchAndSaveStockData called');
     const { symbol } = await request.json() as { symbol: string };
+    console.log('Symbol received:', symbol);
 
     if (!symbol) {
       return Response.json({
         error: "Symbol is required"
       }, { status: 400 });
+    }
+
+    // 日本株の正規化: 4桁の数字の場合は.Tを追加
+    let normalizedSymbol = symbol.toUpperCase();
+    if (/^\d{4}$/.test(normalizedSymbol)) {
+      normalizedSymbol = `${normalizedSymbol}.T`;
+      console.log(`Japanese stock detected, normalized symbol: ${symbol} -> ${normalizedSymbol}`);
     }
 
     const db = context.cloudflare.env.simulator_app_db;
@@ -28,26 +37,32 @@ async function fetchAndSaveStockData(request: Request, context: any) {
         FROM stock_prices 
         WHERE symbol = ?
       `)
-      .bind(symbol.toUpperCase())
+      .bind(normalizedSymbol)
       .first();
 
     if (existingPrices && existingPrices.count > 0) {
       return Response.json({
         success: true,
         message: "Stock data already exists in database",
-        symbol: symbol.toUpperCase()
+        symbol: normalizedSymbol
       });
     }
 
     // 2. 外部APIから株価情報を取得
     const baseUrl = new URL(request.url).origin;
-    const stockInfoResponse = await fetch(`${baseUrl}/api/stock-info?symbol=${symbol}`);
+    const stockInfoUrl = `${baseUrl}/api/stock-info?symbol=${normalizedSymbol}`;
+    console.log('Calling stock-info API:', stockInfoUrl);
+    const stockInfoResponse = await fetch(stockInfoUrl);
     
     if (!stockInfoResponse.ok) {
-      throw new Error(`Failed to fetch stock info: ${stockInfoResponse.status}`);
+      const errorText = await stockInfoResponse.text();
+      console.error(`Stock info API error: ${stockInfoResponse.status}`, errorText);
+      throw new Error(`Failed to fetch stock info: ${stockInfoResponse.status} - ${errorText}`);
     }
 
-    const stockInfo = await stockInfoResponse.json() as {
+    let stockInfo;
+    try {
+      stockInfo = await stockInfoResponse.json() as {
       longName?: string;
       shortName?: string;
       sector?: string;
@@ -62,6 +77,10 @@ async function fetchAndSaveStockData(request: Request, context: any) {
         volume?: number;
       }>;
     };
+    } catch (jsonError) {
+      console.error('JSON parsing error:', jsonError);
+      throw new Error(`Failed to parse stock info response: ${jsonError}`);
+    }
 
     // 3. 株価データをデータベースに保存
     if (stockInfo.chartData && stockInfo.chartData.length > 0) {
@@ -102,7 +121,7 @@ async function fetchAndSaveStockData(request: Request, context: any) {
           
         insertValues.push(
           stockPriceId,
-          symbol.toUpperCase(),
+          normalizedSymbol,
           formattedDate,
           Number(price.open).toFixed(2),
           Number(price.close).toFixed(2),
@@ -134,7 +153,7 @@ async function fetchAndSaveStockData(request: Request, context: any) {
 
         return Response.json({
           success: true,
-          symbol: symbol.toUpperCase(),
+          symbol: normalizedSymbol,
           insertedCount,
           totalProcessed: stockInfo.chartData.length
         });

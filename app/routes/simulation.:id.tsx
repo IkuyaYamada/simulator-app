@@ -1,4 +1,4 @@
-import { useLoaderData, Link, useFetcher, useParams } from "react-router";
+import { useLoaderData, Link, useFetcher, useParams, useNavigate } from "react-router";
 import { useState, useEffect, useMemo } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { formatToJST } from "../utils/date";
@@ -167,6 +167,7 @@ export default function SimulationDetail() {
   const { simulation, checkpoints, pnlRecords, conditions, stockData } = data;
   const { id } = useParams();
   const fetcher = useFetcher();
+  const navigate = useNavigate();
   
   // 基本の株価情報（stabデータベース情報のみ）
   const [stockInfo, setStockInfo] = useState<any>(null);
@@ -189,6 +190,13 @@ export default function SimulationDetail() {
   // 株価データHTML取得用のFetcher
   // stockDataFetcherを削除 - データベースのみをsingle source of truthとする
   
+  // 削除成功時のリダイレクト処理
+  useEffect(() => {
+    if (fetcher.data?.success) {
+      navigate('/');
+    }
+  }, [fetcher.data, navigate]);
+
   // ページロード時に stockData からデータを設定、データがない場合は外部APIから取得
   useEffect(() => {
     if (stockData && stockData.prices && stockData.prices.length > 0) {
@@ -521,10 +529,6 @@ export default function SimulationDetail() {
     }));
   };
 
-  // 削除成功時のリダイレクト
-  if (fetcher.data?.success) {
-    window.location.href = "/simulations";
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

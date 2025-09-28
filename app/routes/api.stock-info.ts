@@ -1,14 +1,26 @@
 export async function loader({ request }: { request: Request }) {
+  return await fetchStockInfo(request);
+}
+
+export async function action({ request }: { request: Request }) {
+  return await fetchStockInfo(request);
+}
+
+async function fetchStockInfo(request: Request) {
   const url = new URL(request.url);
-  const symbol = url.searchParams.get("symbol");
+  let symbol = url.searchParams.get("symbol");
 
   if (!symbol) {
     return Response.json({ error: "Symbol parameter is required" }, { status: 400 });
   }
 
   try {
-    
-    const symbolUpper = symbol.toUpperCase();
+    // 日本株の正規化: 4桁の数字の場合は.Tを追加
+    let symbolUpper = symbol.toUpperCase();
+    if (/^\d{4}$/.test(symbolUpper)) {
+      symbolUpper = `${symbolUpper}.T`;
+      console.log(`Japanese stock detected, normalized symbol: ${symbol} -> ${symbolUpper}`);
+    }
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     };

@@ -10,4 +10,6 @@ export default [
   route("/api/simulations", "routes/api.simulations.ts"),
   route("/api/checkpoints/*", "routes/api.checkpoints.ts"),
   route("/api/conditions/*", "routes/api.conditions.ts"),
+  // キャッチオールルート（未定義のルートをキャッチ）
+  route("$", "routes/$.tsx"),
 ] satisfies RouteConfig;
