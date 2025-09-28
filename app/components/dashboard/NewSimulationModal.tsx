@@ -11,8 +11,6 @@ export function NewSimulationModal({
   isOpen,
   onClose,
 }: NewSimulationModalProps) {
-  const [currentStep, setCurrentStep] = useState(2); // 2: 銘柄指定, 3: シミュレーション設定
-  
   // 銘柄情報入力用の状態
   const [tickerSymbol, setTickerSymbol] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -112,7 +110,6 @@ export function NewSimulationModal({
   if (!isOpen) return null;
 
   const handleClose = () => {
-    setCurrentStep(2);
     setTickerSymbol("");
     setCompanyName("");
     setIndustry("");
@@ -141,17 +138,6 @@ export function NewSimulationModal({
     ]);
     onClose();
   };
-
-  const handleNext = () => {
-    setCurrentStep(currentStep + 1);
-  };
-
-  const handleBack = () => {
-    if (currentStep === 3) {
-      setCurrentStep(2);
-    }
-  };
-
 
   // シミュレーション開始前のバリデーション
   const validateSimulationData = () => {
@@ -295,515 +281,266 @@ export function NewSimulationModal({
           </button>
         </div>
 
-        {/* ステップインジケーター */}
-        {currentStep > 0 && (
-          <div className="px-2 py-1 bg-gray-200 border-b border-black">
-            <div className="flex items-center justify-center space-x-4">
-              {[2, 3].map((step) => (
-                <div key={step} className="flex items-center">
-                  <div
-                    className={`w-6 h-6 border-2 border-gray-600 flex items-center justify-center text-xs font-bold ${
-                      step <= currentStep
-                        ? "bg-green-400 text-black border-green-600"
-                        : "bg-gray-300 text-black border-gray-500"
-                    }`}
-                  >
-                    {step}
-                  </div>
-                  <span
-                    className={`ml-1 text-xs font-bold ${
-                      step <= currentStep
-                        ? "text-black"
-                        : "text-gray-600"
-                    }`}
-                  >
-                    {step === 2 && "銘柄情報入力"}
-                    {step === 3 && "売買条件設定"}
-                  </span>
-                  {step < 3 && (
-                    <div
-                      className={`w-6 h-0.5 mx-2 ${
-                        step < currentStep
-                          ? "bg-green-400"
-                          : "bg-gray-400"
-                      }`}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* コンテンツ */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
 
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                📊 銘柄情報入力
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                投資したい銘柄の情報を入力してください。
+              </p>
 
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-                  📊 銘柄情報入力
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  投資したい銘柄の情報を入力してください。
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      ティッカーシンボル <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={tickerSymbol}
-                        onChange={(e) => handleTickerSymbolChange(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="例: AAPL"
-                        className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={fetchStockInfo}
-                        disabled={!tickerSymbol.trim() || stockInfoFetcher.state === "loading"}
-                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded font-medium transition-colors whitespace-nowrap text-sm"
-                      >
-                        {stockInfoFetcher.state === "loading" ? "検索中..." : "🔍"}
-                      </button>
-                    </div>
-                    {stockInfoFetcher.state === "loading" && (
-                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                        📡 株価情報を取得中...
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      会社名 <span className="text-red-500">*</span>
-                    </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    ティッカーシンボル <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
                     <input
                       type="text"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      placeholder="例: Apple Inc."
-                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100 text-sm"
+                      value={tickerSymbol}
+                      onChange={(e) => handleTickerSymbolChange(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="例: AAPL"
+                      className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100 text-sm"
                     />
-                  </div>
-
-                </div>
-
-                {/* 株価情報表示 */}
-                {stockInfoFetcher.data && !stockInfoFetcher.data.error && (
-                  <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
-                    <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-medium text-green-900 dark:text-green-100 text-sm">
-                        📊 株価情報
-                      </h4>
-                      <div className="text-xs text-green-600 dark:text-green-400">
-                        更新: {stockInfoFetcher.data.marketTimeFormatted}
-                      </div>
-                    </div>
-                    
-                    {/* 価格情報（シンプル版） */}
-                    <div className="mb-3">
-                      <p className="text-green-700 dark:text-green-300 font-medium text-sm">現在価格</p>
-                      <p className="text-green-900 dark:text-green-100 font-bold text-xl">
-                        {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.regularMarketPrice?.toFixed(2) || 'N/A'}
-                      </p>
-                    </div>
-                    
-                    {/* 価格チャート */}
-                    {stockInfoFetcher.data.chartData && stockInfoFetcher.data.chartData.length > 0 && (
-                      <div className="mt-3">
-                        <StockChart 
-                          chartData={stockInfoFetcher.data.chartData}
-                          currency={stockInfoFetcher.data.currency}
-                          height="400px"
-                          symbol={stockInfoFetcher.data.symbol}
-                        />
-                      </div>
-                    )}
-                    
-                    {/* シミュレーション設定フォーム */}
-                    <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
-                      <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3 text-sm">
-                        🎯 シミュレーション設定
-                      </h4>
-                      
-                      <div className="space-y-3">
-                        {/* 初期資本・投資期間設定（一行） */}
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                              初期資本:
-                            </label>
-                            <input
-                              type="number"
-                              value={initialCapital}
-                              onChange={(e) => setInitialCapital(Number(e.target.value))}
-                              className="w-20 px-2 py-1 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100"
-                              min="1000"
-                              step="1000"
-                            />
-                            <span className="text-xs text-blue-600 dark:text-blue-400">円</span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                              投資期間:
-                            </label>
-                            <select 
-                              value={simulationPeriod}
-                              onChange={(e) => setSimulationPeriod(Number(e.target.value))}
-                              className="px-2 py-1 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100"
-                            >
-                              <option value={1}>1ヶ月</option>
-                              <option value={3}>3ヶ月</option>
-                              <option value={6}>6ヶ月</option>
-                              <option value={12}>1年</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* 売買条件設定 */}
-                        <div className="mt-4">
-                          <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
-                            📊 売買条件設定 <span className="text-red-500">*</span>
-                          </h4>
-                          <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
-                            購入・売却の条件を設定します。複数の条件を設定できます。<span className="text-red-500 font-medium">（必須）</span>
-                          </p>
-                          
-                          <div className="space-y-3">
-                            {tradingConditions.map((condition, index) => (
-                              <div key={index} className="flex items-center gap-2 p-2 border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
-                                <span className="text-xs font-bold text-blue-800 dark:text-blue-200 min-w-[40px]">
-                                  条件{index + 1}
-                                </span>
-                                
-                                <select
-                                  value={condition.type}
-                                  onChange={(e) => updateTradingCondition(index, 'type', e.target.value)}
-                                  className="px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-blue-800 dark:text-white"
-                                >
-                                  <option value="buy">購入</option>
-                                  <option value="sell">売却</option>
-                                </select>
-
-                                <select
-                                  value={condition.metric}
-                                  onChange={(e) => updateTradingCondition(index, 'metric', e.target.value)}
-                                  className="px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-blue-800 dark:text-white"
-                                >
-                                  <option value="price">価格</option>
-                                </select>
-
-                                <input
-                                  type="text"
-                                  value={condition.value}
-                                  onChange={(e) => updateTradingCondition(index, 'value', e.target.value)}
-                                  placeholder={getMetricPlaceholder(condition.metric)}
-                                  className="px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-blue-800 dark:text-white w-16"
-                                />
-
-                                <input
-                                  type="text"
-                                  value={condition.description || ''}
-                                  onChange={(e) => updateTradingCondition(index, 'description', e.target.value)}
-                                  placeholder="説明"
-                                  className="px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-blue-800 dark:text-white flex-1"
-                                />
-
-                                {tradingConditions.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => removeTradingCondition(index)}
-                                    className="text-red-500 hover:text-red-700 text-xs px-1 py-0.5"
-                                  >
-                                    ×
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="mt-3">
-                            <button
-                              onClick={addTradingCondition}
-                              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
-                            >
-                              + 条件を追加
-                            </button>
-                          </div>
-
-                          {/* 条件の説明 */}
-                          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                            <h5 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                              📝 条件タイプの説明
-                            </h5>
-                            <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                              <div><strong>購入条件:</strong> 株価が条件を満たした時に購入を検討</div>
-                              <div><strong>売却条件:</strong> 株価が条件を満たした時に売却を検討（利確・損切り含む）</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* シミュレーション開始ボタン */}
-                        <div className="pt-4 border-t border-blue-200 dark:border-blue-700">
-                          <button
-                            type="button"
-                            onClick={handleStartSimulation}
-                            disabled={simulationFetcher.state === "submitting"}
-                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-3 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2"
-                          >
-                            {simulationFetcher.state === "submitting" ? (
-                              <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                シミュレーション作成中...
-                              </>
-                            ) : (
-                              <>
-                                🚀 シミュレーション開始
-                              </>
-                            )}
-                          </button>
-                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 text-center">
-                            初期チェックポイントが自動作成されます
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {stockInfoFetcher.data?.error && (
-                  <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                    <p className="text-red-700 dark:text-red-300 text-sm">
-                      ⚠️ {stockInfoFetcher.data.error}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-                  ⚙️ シミュレーション設定・売買条件
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  入力された銘柄情報でシミュレーションの詳細設定と売買条件を設定します。
-                </p>
-
-                {/* 選択された銘柄情報の表示 */}
-                {(tickerSymbol || companyName) && (
-                  <div className="p-4 mb-4">
-                    <h4 className="font-medium text-green-900 dark:text-green-100 mb-2">
-                      📊 選択された銘柄
-                    </h4>
-                    <div className="text-sm text-green-700 dark:text-green-300">
-                      <p><strong>ティッカー:</strong> {tickerSymbol}</p>
-                      <p><strong>会社名:</strong> {companyName}</p>
-                    </div>
-                    {stockInfoFetcher.data && !stockInfoFetcher.data.error && (
-                      <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
-                        <p className="text-xs text-green-600 dark:text-green-400 mb-1">現在価格</p>
-                        <p className="text-lg font-bold text-green-900 dark:text-green-100">
-                          ${stockInfoFetcher.data.regularMarketPrice?.toFixed(2) || 'N/A'}
-                          <span className={`ml-2 text-sm ${
-                            (stockInfoFetcher.data.regularMarketChange || 0) >= 0
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-red-600 dark:text-red-400'
-                          }`}>
-                            ({stockInfoFetcher.data.regularMarketChange >= 0 ? '+' : ''}
-                            ${stockInfoFetcher.data.regularMarketChange?.toFixed(2) || 'N/A'})
-                          </span>
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      初期資本:
-                    </label>
-                    <input
-                      type="number"
-                      value={initialCapital}
-                      onChange={(e) => setInitialCapital(Number(e.target.value))}
-                      className="w-24 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm"
-                      min="1000"
-                      step="1000"
-                    />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">円</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      投資期間:
-                    </label>
-                    <select 
-                      value={simulationPeriod}
-                      onChange={(e) => setSimulationPeriod(Number(e.target.value))}
-                      className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm"
-                    >
-                      <option value={1}>1ヶ月</option>
-                      <option value={3}>3ヶ月</option>
-                      <option value={6}>6ヶ月</option>
-                      <option value={12}>1年</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 売買条件設定 */}
-                <div className="mt-6">
-                  <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-                    📊 売買条件設定 <span className="text-red-500">*</span>
-                  </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    購入・売却の条件を設定します。複数の条件を設定できます。<span className="text-red-500 font-medium">（必須）</span>
-                  </p>
-                  
-                  <div className="space-y-4">
-                    {tradingConditions.map((condition, index) => (
-                      <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                        <div className="flex justify-between items-center mb-3">
-                          <h5 className="font-medium text-gray-900 dark:text-white">
-                            条件 {index + 1}
-                          </h5>
-                          {tradingConditions.length > 1 && (
-                            <button
-                              onClick={() => removeTradingCondition(index)}
-                              className="text-red-500 hover:text-red-700 text-sm"
-                            >
-                              削除
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {/* 条件タイプ */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              条件タイプ
-                            </label>
-                            <select
-                              value={condition.type}
-                              onChange={(e) => updateTradingCondition(index, 'type', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                            >
-                              <option value="buy">購入条件</option>
-                              <option value="sell">売却条件</option>
-                            </select>
-                          </div>
-
-                          {/* 指標 */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              指標 <span className="text-red-500">*</span>
-                            </label>
-                            <select 
-                              value={condition.metric}
-                              onChange={(e) => updateTradingCondition(index, 'metric', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                            >
-                              <option value="price">価格</option>
-                            </select>
-                          </div>
-
-                          {/* 値 */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              値 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={condition.value}
-                              onChange={(e) => updateTradingCondition(index, 'value', e.target.value)}
-                              placeholder={getMetricPlaceholder(condition.metric)}
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                            />
-                          </div>
-
-                          {/* 説明 */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              説明（任意）
-                            </label>
-                            <input
-                              type="text"
-                              value={condition.description || ''}
-                              onChange={(e) => updateTradingCondition(index, 'description', e.target.value)}
-                              placeholder="条件の詳細説明"
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4">
                     <button
-                      onClick={addTradingCondition}
-                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors"
+                      type="button"
+                      onClick={fetchStockInfo}
+                      disabled={!tickerSymbol.trim() || stockInfoFetcher.state === "loading"}
+                      className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded font-medium transition-colors whitespace-nowrap text-sm"
                     >
-                      + 条件を追加
+                      {stockInfoFetcher.state === "loading" ? "検索中..." : "🔍"}
                     </button>
                   </div>
+                  {stockInfoFetcher.state === "loading" && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      📡 株価情報を取得中...
+                    </p>
+                  )}
+                </div>
 
-                  {/* 条件の説明 */}
-                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <h5 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                      📝 条件タイプの説明
-                    </h5>
-                    <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                      <div><strong>購入条件:</strong> 株価が条件を満たした時に購入を検討</div>
-                      <div><strong>売却条件:</strong> 株価が条件を満たした時に売却を検討（利確・損切り含む）</div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    会社名 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="例: Apple Inc."
+                    className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100 text-sm"
+                  />
+                </div>
+
+              </div>
+
+              {/* 株価情報表示 */}
+              {stockInfoFetcher.data && !stockInfoFetcher.data.error && (
+                <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-green-900 dark:text-green-100 text-sm">
+                      📊 株価情報
+                    </h4>
+                    <div className="text-xs text-green-600 dark:text-green-400">
+                      更新: {stockInfoFetcher.data.marketTimeFormatted}
+                    </div>
+                  </div>
+                  
+                  {/* 価格情報（シンプル版） */}
+                  <div className="mb-3">
+                    <p className="text-green-700 dark:text-green-300 font-medium text-sm">現在価格</p>
+                    <p className="text-green-900 dark:text-green-100 font-bold text-xl">
+                      {(stockInfoFetcher.data.currency === 'JPY' ? '¥' : '$')}{stockInfoFetcher.data.regularMarketPrice?.toFixed(2) || 'N/A'}
+                    </p>
+                  </div>
+                  
+                  {/* 価格チャート */}
+                  {stockInfoFetcher.data.chartData && stockInfoFetcher.data.chartData.length > 0 && (
+                    <div className="mt-3">
+                      <StockChart 
+                        chartData={stockInfoFetcher.data.chartData}
+                        currency={stockInfoFetcher.data.currency}
+                        height="400px"
+                        symbol={stockInfoFetcher.data.symbol}
+                      />
+                    </div>
+                  )}
+                  
+                  {/* シミュレーション設定フォーム */}
+                  <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3 text-sm">
+                      🎯 シミュレーション設定
+                    </h4>
+                    
+                    <div className="space-y-3">
+                      {/* 初期資本・投資期間設定（一行） */}
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                            初期資本:
+                          </label>
+                          <input
+                            type="number"
+                            value={initialCapital}
+                            onChange={(e) => setInitialCapital(Number(e.target.value))}
+                            className="w-20 px-2 py-1 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100"
+                            min="1000"
+                            step="1000"
+                          />
+                          <span className="text-xs text-blue-600 dark:text-blue-400">円</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                            投資期間:
+                          </label>
+                          <select 
+                            value={simulationPeriod}
+                            onChange={(e) => setSimulationPeriod(Number(e.target.value))}
+                            className="px-2 py-1 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100"
+                          >
+                            <option value={1}>1ヶ月</option>
+                            <option value={3}>3ヶ月</option>
+                            <option value={6}>6ヶ月</option>
+                            <option value={12}>1年</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 売買条件設定 */}
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
+                          📊 売買条件設定 <span className="text-red-500">*</span>
+                        </h4>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                          購入・売却の条件を設定します。複数の条件を設定できます。<span className="text-red-500 font-medium">（必須）</span>
+                        </p>
+                        
+                        <div className="space-y-3">
+                          {tradingConditions.map((condition, index) => (
+                            <div key={index} className="flex items-center gap-2 p-2 border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
+                              <span className="text-xs font-bold text-blue-800 dark:text-blue-200 min-w-[40px]">
+                                条件{index + 1}
+                              </span>
+                              
+                              <select
+                                value={condition.type}
+                                onChange={(e) => updateTradingCondition(index, 'type', e.target.value)}
+                                className="px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-blue-800 dark:text-white"
+                              >
+                                <option value="buy">購入</option>
+                                <option value="sell">売却</option>
+                              </select>
+
+                              <select
+                                value={condition.metric}
+                                onChange={(e) => updateTradingCondition(index, 'metric', e.target.value)}
+                                className="px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-blue-800 dark:text-white"
+                              >
+                                <option value="price">価格</option>
+                              </select>
+
+                              <input
+                                type="text"
+                                value={condition.value}
+                                onChange={(e) => updateTradingCondition(index, 'value', e.target.value)}
+                                placeholder={getMetricPlaceholder(condition.metric)}
+                                className="px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-blue-800 dark:text-white w-16"
+                              />
+
+                              <input
+                                type="text"
+                                value={condition.description || ''}
+                                onChange={(e) => updateTradingCondition(index, 'description', e.target.value)}
+                                placeholder="説明"
+                                className="px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded text-xs bg-white dark:bg-blue-800 dark:text-white flex-1"
+                              />
+
+                              {tradingConditions.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeTradingCondition(index)}
+                                  className="text-red-500 hover:text-red-700 text-xs px-1 py-0.5"
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-3">
+                          <button
+                            onClick={addTradingCondition}
+                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
+                          >
+                            + 条件を追加
+                          </button>
+                        </div>
+
+                        {/* 条件の説明 */}
+                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                          <h5 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                            📝 条件タイプの説明
+                          </h5>
+                          <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                            <div><strong>購入条件:</strong> 株価が条件を満たした時に購入を検討</div>
+                            <div><strong>売却条件:</strong> 株価が条件を満たした時に売却を検討（利確・損切り含む）</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* シミュレーション開始ボタン */}
+                      <div className="pt-4 border-t border-blue-200 dark:border-blue-700">
+                        <button
+                          type="button"
+                          onClick={handleStartSimulation}
+                          disabled={simulationFetcher.state === "submitting"}
+                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-3 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2"
+                        >
+                          {simulationFetcher.state === "submitting" ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              シミュレーション作成中...
+                            </>
+                          ) : (
+                            <>
+                              🚀 シミュレーション開始
+                            </>
+                          )}
+                        </button>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 text-center">
+                          初期チェックポイントが自動作成されます
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {stockInfoFetcher.data?.error && (
+                <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <p className="text-red-700 dark:text-red-300 text-sm">
+                    ⚠️ {stockInfoFetcher.data.error}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* フッター */}
-        <div className="flex justify-between items-center p-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end items-center p-6 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={handleBack}
+            onClick={handleClose}
             className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
           >
-            戻る
+            閉じる
           </button>
-
-          <div className="flex gap-3">
-            {currentStep < 3 ? (
-              <button
-                onClick={handleNext}
-                disabled={currentStep === 2 && (!tickerSymbol.trim() || !companyName.trim())}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2 px-6 rounded-lg font-medium transition-colors"
-              >
-                次へ
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  // シミュレーション作成処理
-                  handleClose();
-                }}
-                className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-lg font-medium transition-colors"
-              >
-                シミュレーション開始
-              </button>
-            )}
-          </div>
         </div>
       </div>
     </div>
