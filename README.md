@@ -59,11 +59,26 @@ npx wrangler d1 execute simulator-app-db --remote --command="SELECT * FROM stock
 ```
 
 ### デプロイ
+
+#### 手動デプロイ
 ```bash
 npm run deploy
 
 npx wrangler d1 execute simulator-app-db --remote --file=./database/init.sql
 ```
+
+#### CI/CD自動デプロイ
+GitHub Actionsを使用してmainブランチへのプッシュ時に自動デプロイされます。
+
+**必要なシークレット設定:**
+- `CLOUDFLARE_API_TOKEN`: CloudflareのAPIトークン
+- `CLOUDFLARE_ACCOUNT_ID`: CloudflareのアカウントID
+
+**設定手順:**
+1. GitHubリポジトリの Settings > Secrets and variables > Actions
+2. 以下のシークレットを追加:
+   - `CLOUDFLARE_API_TOKEN`: [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens) で生成
+   - `CLOUDFLARE_ACCOUNT_ID`: Cloudflare Dashboard右側のAccount IDをコピー
 
 ## プロジェクト構成
 
