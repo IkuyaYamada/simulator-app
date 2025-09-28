@@ -1,5 +1,4 @@
 import React from 'react';
-import ReactECharts from 'echarts-for-react';
 
 interface StockChartProps {
   chartData: Array<{
@@ -57,6 +56,89 @@ export function StockChart({
           <div className="text-center text-gray-600">
             <div className="text-xl mb-2">📊</div>
             <div>チャートデータがありません</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Lazy load ReactECharts with error handling
+  const [ReactECharts, setReactECharts] = React.useState<any>(null);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    // Dynamic import with error handling
+    import('echarts-for-react')
+      .then((module) => {
+        if (isMounted) {
+          setReactECharts(() => module.default);
+          setIsLoading(false);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load ECharts:', error);
+        if (isMounted) {
+          setLoadError('チャートライブラリの読み込みに失敗しました');
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div style={{ width, height }}>
+        <div 
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f9fafb',
+            border: '1px solid #e5e7eb',
+            borderRadius: '0.375rem'
+          }}
+        >
+          <div className="text-center text-gray-600">
+            <div className="text-xl mb-2">⏳</div>
+            <div>チャートを読み込み中...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError || !ReactECharts) {
+    return (
+      <div style={{ width, height }}>
+        <div 
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '0.375rem'
+          }}
+        >
+          <div className="text-center text-red-600">
+            <div className="text-xl mb-2">⚠️</div>
+            <div>{loadError || 'チャートライブラリの読み込みエラー'}</div>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-3 px-4 py-2 bg-red-600 text-white text-xs rounded-md hover:bg-red-700"
+            >
+              再読み込み
+            </button>
           </div>
         </div>
       </div>
@@ -397,7 +479,7 @@ export function StockChart({
     <div style={{ width }}>
       <div style={{ height }}>
         {/* Add safety check for chartData */}
-        {chartData && chartData.length > 0 ? (
+        {chartData && chartData.length > 0 && ReactECharts ? (
           <ReactECharts 
             option={option}
             style={{ width: '100%', height: '100%' }}
