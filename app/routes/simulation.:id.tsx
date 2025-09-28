@@ -111,6 +111,7 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
     if (!stockData.prices || stockData.prices.length === 0) {
       try {
         const baseUrl = new URL(request.url).origin;
+        
         const stockDataResponse = await fetch(`${baseUrl}/api/stock-data`, {
           method: 'POST',
           headers: {
@@ -120,7 +121,7 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
             symbol: simulationData.symbol
           })
         });
-
+        
         if (stockDataResponse.ok) {
           // データが保存されたので、再度取得
           const updatedStockData = await getStockData(db, simulationData.symbol);
@@ -131,6 +132,9 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
             conditions: conditionsData,
             stockData: updatedStockData
           };
+        } else {
+          const errorText = await stockDataResponse.text();
+          console.error('API call failed:', stockDataResponse.status, errorText);
         }
       } catch (error) {
         console.error("Failed to fetch stock data:", error);

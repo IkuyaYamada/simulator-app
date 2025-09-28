@@ -84,14 +84,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }, { status: 400 });
     }
 
-    // 挿入予定のデータの日付範囲をログ出力
-    const dates = [];
-    for (let i = 2; i < insertValues.length; i += 9) {
-      dates.push(insertValues[i]);
-    }
-    const minDate = Math.min(...dates.map(d => new Date(d).getTime()));
-    const maxDate = Math.max(...dates.map(d => new Date(d).getTime()));
-    console.log(`Inserting ${insertValues.length / 9} price records for ${symbol}, date range: ${new Date(minDate).toISOString().split('T')[0]} to ${new Date(maxDate).toISOString().split('T')[0]}`);
 
     // INSERTを実行
     // 複数INSERTなので prepareのqueryを毎回使用

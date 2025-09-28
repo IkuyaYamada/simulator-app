@@ -130,6 +130,8 @@ async function createSimulation(request: Request, context: any) {
       `).bind(companyName.trim(), symbol.toUpperCase()).run();
     }
 
+    // 株価データはシミュレーション詳細ページで必要に応じて取得する
+
     // 3. Simulation テーブルに新規レコード作成（明示的UTC保存）
     const simulationId = crypto.randomUUID();
     const nowUTC = new Date().toISOString(); // UTC時刻を明示的取得

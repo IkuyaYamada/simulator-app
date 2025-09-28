@@ -1,5 +1,4 @@
-import { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
-import { v4 as uuidv4 } from 'uuid';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method === 'POST') {
@@ -86,7 +85,7 @@ async function createConditions(request: Request, context: any) {
 
     // 新しい条件を挿入
     const insertPromises = conditions.map((condition: any) => {
-      const conditionId = uuidv4();
+      const conditionId = crypto.randomUUID();
       return db.prepare(`
         INSERT INTO conditions (condition_id, checkpoint_id, type, metric, value, is_active, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)

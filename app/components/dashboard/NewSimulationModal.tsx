@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useNavigate } from "react-router";
 import { StockChart } from "../common/StockChart";
 
 interface NewSimulationModalProps {
@@ -11,6 +11,8 @@ export function NewSimulationModal({
   isOpen,
   onClose,
 }: NewSimulationModalProps) {
+  const navigate = useNavigate();
+  
   // 銘柄情報入力用の状態
   const [tickerSymbol, setTickerSymbol] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -100,12 +102,12 @@ export function NewSimulationModal({
   // シミュレーション作成結果の処理
   useEffect(() => {
     if (simulationFetcher.data && !simulationFetcher.data.error) {
-      alert(`シミュレーションが作成されました！\nシミュレーションID: ${simulationFetcher.data.simulationId}`);
-      handleClose();
+      // アラートを削除し、直接ホームページに遷移
+      navigate('/');
     } else if (simulationFetcher.data && simulationFetcher.data.error) {
       alert(`エラー: ${simulationFetcher.data.error}`);
     }
-  }, [simulationFetcher.data]);
+  }, [simulationFetcher.data, navigate]);
 
   if (!isOpen) return null;
 
