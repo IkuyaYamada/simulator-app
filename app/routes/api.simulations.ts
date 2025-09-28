@@ -18,6 +18,7 @@ async function createSimulation(request: Request, context: any) {
     // FormDataとして送信されるデータを取得
     const formData = await request.formData();
     const symbol = formData.get("symbol") as string;
+    const companyName = formData.get("companyName") as string;
     const initialCapital = Number(formData.get("initialCapital"));
     const startDate = formData.get("startDate") as string;
     const endDate = formData.get("endDate") as string;
@@ -96,28 +97,37 @@ async function createSimulation(request: Request, context: any) {
           industry?: string;
         };
 
+        // 送信されたcompanyNameを優先、なければAPIから取得した名前を使用
+        const finalCompanyName = companyName?.trim() || stockInfo.longName || stockInfo.shortName || symbol.toUpperCase();
+
         await db.prepare(`
           INSERT INTO stocks (symbol, name, sector, industry)
           VALUES (?, ?, ?, ?)
         `).bind(
           symbol.toUpperCase(),
-          stockInfo.longName || stockInfo.shortName || symbol.toUpperCase(),
+          finalCompanyName,
           stockInfo.sector || "不明",
           stockInfo.industry || "不明"
         ).run();
       } catch (error) {
         console.error("Failed to fetch stock info:", error);
-        // フォールバック: 基本的な情報で保存
+        // フォールバック: 送信されたcompanyNameまたはsymbolを使用
+        const fallbackName = companyName?.trim() || symbol.toUpperCase();
         await db.prepare(`
           INSERT INTO stocks (symbol, name, sector, industry)
           VALUES (?, ?, ?, ?)
         `).bind(
           symbol.toUpperCase(),
-          symbol.toUpperCase(),
+          fallbackName,
           "不明",
           "不明"
         ).run();
       }
+    } else if (companyName?.trim() && existingStock.name !== companyName.trim()) {
+      // 既存の銘柄でも、送信されたcompanyNameが異なる場合は更新
+      await db.prepare(`
+        UPDATE stocks SET name = ? WHERE symbol = ?
+      `).bind(companyName.trim(), symbol.toUpperCase()).run();
     }
 
     // 3. Simulation テーブルに新規レコード作成（明示的UTC保存）

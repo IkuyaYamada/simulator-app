@@ -81,7 +81,7 @@ async function getStockData(db: any, symbol: string) {
   return { stock: stockData, prices: stockPrices.results || [] };
 }
 
-export async function loader({ params, context }: LoaderFunctionArgs) {
+export async function loader({ params, context, request }: LoaderFunctionArgs) {
   const { id } = params;
   
   if (!id) {
@@ -106,6 +106,37 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
       // 新しいアプローチ：symbolベースでstockデータを直接取得
       getStockData(db, simulationData.symbol)
     ]);
+
+    // 株価データがない場合、API経由で取得・保存
+    if (!stockData.prices || stockData.prices.length === 0) {
+      try {
+        const baseUrl = new URL(request.url).origin;
+        const stockDataResponse = await fetch(`${baseUrl}/api/stock-data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            symbol: simulationData.symbol
+          })
+        });
+
+        if (stockDataResponse.ok) {
+          // データが保存されたので、再度取得
+          const updatedStockData = await getStockData(db, simulationData.symbol);
+          return {
+            simulation: simulationData,
+            checkpoints: checkpointsData,
+            pnlRecords: pnlRecordsData,
+            conditions: conditionsData,
+            stockData: updatedStockData
+          };
+        }
+      } catch (error) {
+        console.error("Failed to fetch stock data:", error);
+        // エラーが発生しても既存のデータで続行
+      }
+    }
 
     return Response.json({
       simulation: simulationData,
@@ -152,7 +183,7 @@ export default function SimulationDetail() {
   }, [checkpoints]);
 
   // 株価データHTML取得用のFetcher
-  const stockDataFetcher = useFetcher();
+  // stockDataFetcherを削除 - データベースのみをsingle source of truthとする
   
   // ページロード時に stockData からデータを設定、データがない場合は外部APIから取得
   useEffect(() => {
@@ -189,13 +220,6 @@ export default function SimulationDetail() {
       }).filter((item: any) => item !== null); // 無効なデータを除外
       
       setChartData(formattedPrices.reverse()); // 時系列順に並び替え
-    } else if (simulation && simulation.symbol && 
-               ((!stockData || !stockData.prices || stockData.prices.length === 0) || 
-                (!stockData.stock || !stockData.stock.name || stockData.stock.name === simulation.symbol || stockData.stock.name.length <= 10))) {
-      // データベースにデータがない場合、または会社名が不適切な場合、外部APIから取得してデータベースに保存
-      console.log('外部APIから株価・会社名情報を取得します:', simulation.symbol);
-      
-      stockDataFetcher.load(`/api/stock-info?symbol=${simulation.symbol}`);
     }
     
     // 基本的な株価情報を設定（データベースから取得された情報）
@@ -208,98 +232,9 @@ export default function SimulationDetail() {
         currency: 'JPY' // 日本市場を想定
       });
     }
-  }, [stockData, simulation, stockDataFetcher]);
+  }, [stockData, simulation]);
   
-  // 外部APIから取得したデータを処理・データベースに保存
-  useEffect(() => {
-    if (stockDataFetcher.data && !stockDataFetcher.data.error && stockDataFetcher.data.chartData) {
-      console.log('外部APIから取得した株価データをデータベースに保存中...', stockDataFetcher.data.chartData.length);
-      
-      // 外部APIのデータをデータベースに保存する処理
-      // この処理をAPIエンドポイントに移行しておく必要がある
-      try {
-        fetch('/api/stock-prices', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            symbol: simulation.symbol,
-            prices: stockDataFetcher.data.chartData
-          })
-        }).then(response => {
-          if (response.ok) {
-            console.log('株価データをデータベースに保存しました');
-            // ページを再読み込みしてデータベースから最新データを取得
-            window.location.reload();
-          } else {
-            console.error('株価データの保存に失敗しました');
-          }
-        });
-        
-        // 外部APIから取得したデータをチャートに一時的に表示
-        const validChartData = stockDataFetcher.data.chartData
-          .filter((data: any) => data && typeof data === 'object')
-          .map((data: any) => {
-            if (!data) return null;
-            
-            const numOpen = Number(data.open);
-            const numClose = Number(data.close);
-            const numHigh = Number(data.high);
-            const numLow = Number(data.low);
-            const numVolume = Number(data.volume) || 0;
-            
-            const isValid = !isNaN(numOpen) && !isNaN(numClose) && !isNaN(numHigh) && !isNaN(numLow) &&
-                           numOpen > 0 && numClose > 0 && numHigh > 0 && numLow > 0;
-            
-            if (!isValid) return null;
-            
-            const date = data.date || data.fullDate;
-            const priceDate = new Date(date);
-            if (isNaN(priceDate.getTime())) return null;
-            
-            return {
-              date: date,
-              fullDate: priceDate.toISOString().split('T')[0],
-              high: numHigh,
-              low: numLow,
-              close: numClose,
-              open: numOpen,
-              volume: numVolume,
-              timestamp: priceDate.getTime() / 1000
-            };
-          }).filter((item: any) => item !== null);
-        
-        setChartData(validChartData);
-        setStockInfo({
-          symbol: simulation.symbol,
-          name: stockDataFetcher.data.longName || stockDataFetcher.data.shortName || simulation.stock_name || simulation.symbol,
-          sector: stockDataFetcher.data.sector || '不明',
-          industry: stockDataFetcher.data.industry || '不明',
-          currency: 'JPY'
-        });
-      } catch (error) {
-        console.error('株価データの処理に失敗しました:', error);
-      }
-    }
-  }, [stockDataFetcher.data, simulation]);
-
-  // 外部APIから取得した会社名情報でstockInfoを更新（チャートデータに関係なく）
-  useEffect(() => {
-    if (stockDataFetcher.data && !stockDataFetcher.data.error && 
-        (stockDataFetcher.data.longName || stockDataFetcher.data.shortName)) {
-      console.log('外部APIから取得した会社名情報でstockInfoを更新:', stockDataFetcher.data.longName || stockDataFetcher.data.shortName);
-      
-      setStockInfo(prev => ({
-        ...prev,
-        symbol: simulation.symbol,
-        name: stockDataFetcher.data.longName || stockDataFetcher.data.shortName || prev?.name || simulation.stock_name || simulation.symbol,
-        sector: stockDataFetcher.data.sector || prev?.sector || '不明',
-        industry: stockDataFetcher.data.industry || prev?.industry || '不明',
-        currency: 'JPY'
-      }));
-    }
-  }, [stockDataFetcher.data, simulation]);
+  // 外部API呼び出しを削除 - データベースのみをsingle source of truthとする
 
 
   // チャートデータフィルタリング（選択された期間に応じて表示）

@@ -186,6 +186,7 @@ export function NewSimulationModal({
     // FormDataとして明示的に送信
     const formData = new FormData();
     formData.append("symbol", tickerSymbol.toUpperCase());
+    formData.append("companyName", companyName); // 会社名を追加
     formData.append("initialCapital", initialCapital.toString());
     formData.append("startDate", startDate.toISOString().split('T')[0]);
     formData.append("endDate", endDate.toISOString().split('T')[0]);
