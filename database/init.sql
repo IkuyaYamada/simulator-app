@@ -94,9 +94,15 @@ CREATE TABLE
         hypothesis_id TEXT PRIMARY KEY, -- UUID
         checkpoint_id TEXT NOT NULL, -- チェックポイントID (FK)
         description TEXT NOT NULL, -- 仮説の説明
+        factor_type TEXT NOT NULL, -- 要因の種類 ('positive' or 'negative')
+        price_impact INTEGER NOT NULL, -- 価格貢献度 (-5〜+5)
+        confidence_level INTEGER NOT NULL, -- 確信度 (1〜5)
         is_active BOOLEAN DEFAULT TRUE, -- アクティブフラグ
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (checkpoint_id) REFERENCES checkpoints (checkpoint_id)
+        FOREIGN KEY (checkpoint_id) REFERENCES checkpoints (checkpoint_id),
+        CHECK (price_impact >= -5 AND price_impact <= 5),
+        CHECK (confidence_level >= 1 AND confidence_level <= 5),
+        CHECK (factor_type IN ('positive', 'negative'))
     );
 
 -- 売買条件テーブル

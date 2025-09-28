@@ -23,6 +23,7 @@ async function createSimulation(request: Request, context: any) {
     const startDate = formData.get("startDate") as string;
     const endDate = formData.get("endDate") as string;
     const tradingConditionsData = formData.get("tradingConditions") as string;
+    const hypothesesData = formData.get("hypotheses") as string;
 
     // バリデーション
     if (!symbol || !initialCapital || !startDate || !endDate) {
@@ -44,6 +45,38 @@ async function createSimulation(request: Request, context: any) {
     } catch (error) {
       return Response.json({ 
         error: "売買条件のデータ形式が正しくありません" 
+      }, { status: 400 });
+    }
+
+    // 仮説データのバリデーション
+    if (!hypothesesData) {
+      return Response.json({ 
+        error: "投資仮説が設定されていません" 
+      }, { status: 400 });
+    }
+
+    let hypotheses;
+    try {
+      hypotheses = JSON.parse(hypothesesData);
+    } catch (error) {
+      return Response.json({ 
+        error: "投資仮説のデータ形式が正しくありません" 
+      }, { status: 400 });
+    }
+
+    // 仮説の必須チェック
+    const positiveHypotheses = hypotheses.filter((h: any) => h.factor_type === 'positive' && h.description?.trim() !== '');
+    const negativeHypotheses = hypotheses.filter((h: any) => h.factor_type === 'negative' && h.description?.trim() !== '');
+    
+    if (positiveHypotheses.length < 5) {
+      return Response.json({ 
+        error: `ポジティブ要因を5件以上入力してください（現在: ${positiveHypotheses.length}件）` 
+      }, { status: 400 });
+    }
+    
+    if (negativeHypotheses.length < 5) {
+      return Response.json({ 
+        error: `ネガティブ要因を5件以上入力してください（現在: ${negativeHypotheses.length}件）` 
       }, { status: 400 });
     }
 
@@ -182,6 +215,34 @@ async function createSimulation(request: Request, context: any) {
       // 売買条件の保存に失敗した場合はエラーを返す
       return Response.json({ 
         error: "売買条件の保存に失敗しました" 
+      }, { status: 500 });
+    }
+
+    // 6. 投資仮説を初期チェックポイントに関連付けて保存
+    try {
+      // バリデーション済みの有効な仮説を挿入
+      for (const hypothesis of hypotheses) {
+        if (hypothesis.description?.trim()) {
+          const hypothesisId = crypto.randomUUID();
+          await db.prepare(`
+            INSERT INTO hypotheses (hypothesis_id, checkpoint_id, description, factor_type, price_impact, confidence_level, is_active, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, TRUE, ?)
+          `).bind(
+            hypothesisId,
+            checkpointId,
+            hypothesis.description.trim(),
+            hypothesis.factor_type,
+            hypothesis.price_impact,
+            hypothesis.confidence_level,
+            nowUTC
+          ).run();
+        }
+      }
+    } catch (error) {
+      console.error("Failed to save hypotheses:", error);
+      // 仮説の保存に失敗した場合はエラーを返す
+      return Response.json({ 
+        error: "投資仮説の保存に失敗しました" 
       }, { status: 500 });
     }
 

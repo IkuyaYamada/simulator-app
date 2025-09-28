@@ -61,6 +61,20 @@ async function getConditions(db: any, id: string) {
   return conditions.results || [];
 }
 
+async function getHypotheses(db: any, id: string) {
+  const hypotheses = await db
+    .prepare(`
+      SELECT h.*, cp.checkpoint_date, cp.checkpoint_type
+      FROM hypotheses h
+      JOIN checkpoints cp ON h.checkpoint_id = cp.checkpoint_id
+      WHERE cp.simulation_id = ? AND h.is_active = 1
+      ORDER BY cp.checkpoint_date DESC, h.updated_at DESC
+    `)
+    .bind(id)
+    .all();
+  return hypotheses.results || [];
+}
+
 // 新しい定義: symbolを直接使用してstock情報とstock_pricesを取得
 async function getStockData(db: any, symbol: string) {
   console.log('getStockData called with symbol:', symbol);
@@ -119,10 +133,11 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
 
     // symbolベースでstock情報とstock_pricesを取得
     console.log('Fetching additional data for symbol:', simulationData.symbol);
-    const [checkpointsData, pnlRecordsData, conditionsData, stockData] = await Promise.all([
+    const [checkpointsData, pnlRecordsData, conditionsData, hypothesesData, stockData] = await Promise.all([
       getCheckpoints(db, id),
       getPnLRecords(db, id),
       getConditions(db, id),
+      getHypotheses(db, id),
       // 新しいアプローチ：symbolベースでstockデータを直接取得
       getStockData(db, simulationData.symbol)
     ]);
@@ -131,6 +146,7 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
       checkpoints: checkpointsData?.length || 0,
       pnlRecords: pnlRecordsData?.length || 0,
       conditions: conditionsData?.length || 0,
+      hypotheses: hypothesesData?.length || 0,
       stockData: stockData ? 'present' : 'null',
       stockPrices: stockData?.prices?.length || 0
     });
@@ -158,6 +174,7 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
             checkpoints: checkpointsData,
             pnlRecords: pnlRecordsData,
             conditions: conditionsData,
+            hypotheses: hypothesesData,
             stockData: updatedStockData
           };
         } else {
@@ -175,6 +192,7 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
       checkpoints: checkpointsData,
       pnlRecords: pnlRecordsData,
       conditions: conditionsData,
+      hypotheses: hypothesesData,
       stockData: stockData // 新規追加
     });
   } catch (error) {
@@ -197,12 +215,13 @@ export default function SimulationDetail() {
     checkpoints: any[];
     pnlRecords: any[];
     conditions: any[];
+    hypotheses: any[];
     stockData: any; // 新規追加
     error?: string;
     details?: string;
   };
 
-  const { simulation, checkpoints, pnlRecords, conditions, stockData, error, details } = data;
+  const { simulation, checkpoints, pnlRecords, conditions, hypotheses, stockData, error, details } = data;
   const { id } = useParams();
   const fetcher = useFetcher();
   const navigate = useNavigate();
@@ -509,7 +528,13 @@ export default function SimulationDetail() {
     type: string;
     date: string;
     note: string;
-    hypotheses: string[];
+    hypotheses: Array<{
+      id: string;
+      description: string;
+      factor_type: 'positive' | 'negative';
+      price_impact: number;
+      confidence_level: number;
+    }>;
     conditions: Array<{
       type: string;
       metric: string;
@@ -519,7 +544,7 @@ export default function SimulationDetail() {
     type: "manual",
     date: new Date().toISOString().split('T')[0],
     note: "",
-    hypotheses: [""],
+    hypotheses: [],
     conditions: []
   });
 
@@ -595,11 +620,7 @@ export default function SimulationDetail() {
     formData.append("note", checkpointForm.note);
     
     // 投資仮説の追加
-    checkpointForm.hypotheses.forEach((hypothesis: string) => {
-      if (hypothesis.trim()) {
-        formData.append("hypotheses", hypothesis.trim());
-      }
-    });
+    formData.append("hypotheses", JSON.stringify(checkpointForm.hypotheses));
     
     // 売買条件の追加
     formData.append("conditions", JSON.stringify(checkpointForm.conditions));
@@ -614,17 +635,51 @@ export default function SimulationDetail() {
       type: "manual",
       date: new Date().toISOString().split('T')[0],
       note: "",
-      hypotheses: [""],
+      hypotheses: [],
       conditions: []
     });
   };
 
   // 投資仮説の追加
-  const addHypothesis = () => {
+  const addHypothesis = (factorType: 'positive' | 'negative') => {
+    const newHypothesis = {
+      id: Date.now().toString(),
+      description: '',
+      factor_type: factorType,
+      price_impact: 0,
+      confidence_level: 1
+    };
     setCheckpointForm((prev: typeof checkpointForm) => ({
       ...prev,
-      hypotheses: [...prev.hypotheses, ""]
+      hypotheses: [...prev.hypotheses, newHypothesis]
     }));
+  };
+
+  // 投資仮説の削除
+  const removeHypothesis = (id: string) => {
+    setCheckpointForm((prev: typeof checkpointForm) => ({
+      ...prev,
+      hypotheses: prev.hypotheses.filter(h => h.id !== id)
+    }));
+  };
+
+  // 投資仮説の更新
+  const updateHypothesis = (id: string, field: string, value: any) => {
+    setCheckpointForm((prev: typeof checkpointForm) => ({
+      ...prev,
+      hypotheses: prev.hypotheses.map(h => 
+        h.id === id ? { ...h, [field]: value } : h
+      )
+    }));
+  };
+
+  // リスクスコア計算
+  const calculateRiskScore = (hypothesis: any) => {
+    return hypothesis.price_impact * hypothesis.confidence_level;
+  };
+
+  const getTotalRiskScore = () => {
+    return checkpointForm.hypotheses.reduce((total, h) => total + calculateRiskScore(h), 0);
   };
 
   // 売買条件モーダルを開く
@@ -639,13 +694,6 @@ export default function SimulationDetail() {
     setSelectedCheckpointId(null);
   };
 
-  // 投資仮説の削除
-  const removeHypothesis = (index: number) => {
-    setCheckpointForm((prev: typeof checkpointForm) => ({
-      ...prev,
-      hypotheses: prev.hypotheses.filter((_, i) => i !== index)
-    }));
-  };
 
 
   return (
@@ -1239,6 +1287,66 @@ export default function SimulationDetail() {
                       {checkpoint.note}
                     </p>
                   )}
+
+                  {/* 仮説情報表示 */}
+                  {(() => {
+                    const checkpointHypotheses = hypotheses.filter((h: any) => h.checkpoint_id === checkpoint.checkpoint_id);
+                    if (checkpointHypotheses.length > 0) {
+                      const positiveHypotheses = checkpointHypotheses.filter((h: any) => h.factor_type === 'positive');
+                      const negativeHypotheses = checkpointHypotheses.filter((h: any) => h.factor_type === 'negative');
+                      const totalRiskScore = checkpointHypotheses.reduce((total: number, h: any) => total + (h.price_impact * h.confidence_level), 0);
+                      
+                      return (
+                        <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded border">
+                          <div className="flex justify-between items-center mb-3">
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              🧠 投資仮説・リスク評価
+                            </h4>
+                            <span className={`text-sm font-bold ${totalRiskScore >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              リスクスコア: {totalRiskScore > 0 ? '+' : ''}{totalRiskScore}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* ポジティブ要因 */}
+                            <div>
+                              <h5 className="text-xs font-medium text-green-800 dark:text-green-200 mb-2">
+                                ✅ ポジティブ要因 ({positiveHypotheses.length}件)
+                              </h5>
+                              <div className="space-y-1">
+                                {positiveHypotheses.map((h: any, index: number) => (
+                                  <div key={h.hypothesis_id} className="text-xs p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-700">
+                                    <div className="font-medium text-green-800 dark:text-green-200">{h.description}</div>
+                                    <div className="text-green-600 dark:text-green-400">
+                                      貢献度: +{h.price_impact} | 確信度: {h.confidence_level} | スコア: {h.price_impact * h.confidence_level}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            {/* ネガティブ要因 */}
+                            <div>
+                              <h5 className="text-xs font-medium text-red-800 dark:text-red-200 mb-2">
+                                ❌ ネガティブ要因 ({negativeHypotheses.length}件)
+                              </h5>
+                              <div className="space-y-1">
+                                {negativeHypotheses.map((h: any, index: number) => (
+                                  <div key={h.hypothesis_id} className="text-xs p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-700">
+                                    <div className="font-medium text-red-800 dark:text-red-200">{h.description}</div>
+                                    <div className="text-red-600 dark:text-red-400">
+                                      貢献度: {h.price_impact} | 確信度: {h.confidence_level} | スコア: {h.price_impact * h.confidence_level}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   
                   {/* 売買条件ボタン */}
                   <div className="mt-3">
@@ -1563,45 +1671,190 @@ export default function SimulationDetail() {
                 />
               </div>
 
-              {/* 投資仮説 */}
+              {/* 投資仮説・リスク評価 */}
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-4">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    投資仮説
+                    🧠 投資仮説・リスク評価
                   </label>
-                  <button
-                    type="button"
-                    onClick={addHypothesis}
-                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm"
-                  >
-                    仮説を追加
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => addHypothesis('positive')}
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm"
+                    >
+                      + ポジティブ要因
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addHypothesis('negative')}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm"
+                    >
+                      + ネガティブ要因
+                    </button>
+                  </div>
                 </div>
 
-                {checkpointForm.hypotheses.map((hypothesis, index) => (
-                  <div key={index} className="flex gap-2 mb-3">
-                    <input
-                      type="text"
-                      value={hypothesis}
-                      onChange={(e) => {
-                        const newHypotheses = [...checkpointForm.hypotheses];
-                        newHypotheses[index] = e.target.value;
-                        setCheckpointForm((prev: typeof checkpointForm) => ({ ...prev, hypotheses: newHypotheses }));
-                      }}
-                      placeholder={`投資仮説 ${index + 1}`}
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
-                    {checkpointForm.hypotheses.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeHypothesis(index)}
-                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md"
-                      >
-                        削除
-                      </button>
-                    )}
+                {/* リスクスコア表示 */}
+                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded border">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      総合リスクスコア:
+                    </span>
+                    <span className={`text-lg font-bold ${getTotalRiskScore() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {getTotalRiskScore() > 0 ? '+' : ''}{getTotalRiskScore()}
+                    </span>
                   </div>
-                ))}
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    範囲: -25〜+25（価格貢献度×確信度の合計）
+                  </div>
+                </div>
+
+                {/* ポジティブ要因 */}
+                <div className="mb-4">
+                  <h5 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">
+                    ✅ ポジティブ要因 ({checkpointForm.hypotheses.filter(h => h.factor_type === 'positive' && h.description.trim() !== '').length}件)
+                  </h5>
+                  
+                  <div className="space-y-2">
+                    {checkpointForm.hypotheses.filter(h => h.factor_type === 'positive').map((hypothesis, index) => (
+                      <div key={hypothesis.id} className="p-3 border border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20 rounded">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-bold text-green-800 dark:text-green-200">
+                            要因{index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeHypothesis(hypothesis.id)}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={hypothesis.description}
+                            onChange={(e) => updateHypothesis(hypothesis.id, 'description', e.target.value)}
+                            placeholder="ポジティブ要因を入力してください"
+                            className="w-full px-2 py-1 border border-green-300 dark:border-green-600 rounded text-xs bg-white dark:bg-gray-800"
+                          />
+                          
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              <label className="text-xs text-green-700 dark:text-green-300">価格貢献度:</label>
+                              <select
+                                value={hypothesis.price_impact}
+                                onChange={(e) => updateHypothesis(hypothesis.id, 'price_impact', parseInt(e.target.value))}
+                                className="px-1 py-0.5 border border-green-300 dark:border-green-600 rounded text-xs bg-white dark:bg-gray-800"
+                              >
+                                <option value={0}>0: 影響なし</option>
+                                <option value={1}>+1: 1-2%押し上げ</option>
+                                <option value={2}>+2: 2-5%押し上げ</option>
+                                <option value={3}>+3: 5-10%押し上げ</option>
+                                <option value={4}>+4: 10-20%押し上げ</option>
+                                <option value={5}>+5: 20%以上押し上げ</option>
+                              </select>
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                              <label className="text-xs text-green-700 dark:text-green-300">確信度:</label>
+                              <select
+                                value={hypothesis.confidence_level}
+                                onChange={(e) => updateHypothesis(hypothesis.id, 'confidence_level', parseInt(e.target.value))}
+                                className="px-1 py-0.5 border border-green-300 dark:border-green-600 rounded text-xs bg-white dark:bg-gray-800"
+                              >
+                                <option value={1}>1: 直感レベル</option>
+                                <option value={2}>2: 噂レベル</option>
+                                <option value={3}>3: メディア噂レベル</option>
+                                <option value={4}>4: メディアレベル</option>
+                                <option value={5}>5: 公式発表レベル</option>
+                              </select>
+                            </div>
+                            
+                            <div className="text-xs text-green-600 dark:text-green-400">
+                              リスクスコア: {calculateRiskScore(hypothesis)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ネガティブ要因 */}
+                <div className="mb-4">
+                  <h5 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">
+                    ❌ ネガティブ要因 ({checkpointForm.hypotheses.filter(h => h.factor_type === 'negative' && h.description.trim() !== '').length}件)
+                  </h5>
+                  
+                  <div className="space-y-2">
+                    {checkpointForm.hypotheses.filter(h => h.factor_type === 'negative').map((hypothesis, index) => (
+                      <div key={hypothesis.id} className="p-3 border border-red-300 dark:border-red-600 bg-red-50 dark:bg-red-900/20 rounded">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-bold text-red-800 dark:text-red-200">
+                            要因{index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeHypothesis(hypothesis.id)}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={hypothesis.description}
+                            onChange={(e) => updateHypothesis(hypothesis.id, 'description', e.target.value)}
+                            placeholder="ネガティブ要因を入力してください"
+                            className="w-full px-2 py-1 border border-red-300 dark:border-red-600 rounded text-xs bg-white dark:bg-gray-800"
+                          />
+                          
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              <label className="text-xs text-red-700 dark:text-red-300">価格貢献度:</label>
+                              <select
+                                value={hypothesis.price_impact}
+                                onChange={(e) => updateHypothesis(hypothesis.id, 'price_impact', parseInt(e.target.value))}
+                                className="px-1 py-0.5 border border-red-300 dark:border-red-600 rounded text-xs bg-white dark:bg-gray-800"
+                              >
+                                <option value={0}>0: 影響なし</option>
+                                <option value={-1}>-1: 1-2%押し下げ</option>
+                                <option value={-2}>-2: 2-5%押し下げ</option>
+                                <option value={-3}>-3: 5-10%押し下げ</option>
+                                <option value={-4}>-4: 10-20%押し下げ</option>
+                                <option value={-5}>-5: 20%以上押し下げ</option>
+                              </select>
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                              <label className="text-xs text-red-700 dark:text-red-300">確信度:</label>
+                              <select
+                                value={hypothesis.confidence_level}
+                                onChange={(e) => updateHypothesis(hypothesis.id, 'confidence_level', parseInt(e.target.value))}
+                                className="px-1 py-0.5 border border-red-300 dark:border-red-600 rounded text-xs bg-white dark:bg-gray-800"
+                              >
+                                <option value={1}>1: 直感レベル</option>
+                                <option value={2}>2: 噂レベル</option>
+                                <option value={3}>3: メディア噂レベル</option>
+                                <option value={4}>4: メディアレベル</option>
+                                <option value={5}>5: 公式発表レベル</option>
+                              </select>
+                            </div>
+                            
+                            <div className="text-xs text-red-600 dark:text-red-400">
+                              リスクスコア: {calculateRiskScore(hypothesis)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* ボタン */}

@@ -26,8 +26,18 @@ async function createCheckpoint(request: Request, context: any) {
     const checkpointDate = formData.get("checkpointDate") as string;
     const note = formData.get("note") as string || "";
     
-    // 投資仮説データ（複数ある可能性）
-    const hypotheses = formData.getAll("hypotheses") as string[];
+    // 投資仮説データ（JSON形式）
+    const hypothesesData = formData.get("hypotheses") as string;
+    let hypotheses = [];
+    if (hypothesesData) {
+      try {
+        hypotheses = JSON.parse(hypothesesData);
+      } catch (error) {
+        return Response.json({ 
+          error: "投資仮説のデータ形式が正しくありません" 
+        }, { status: 400 });
+      }
+    }
     
     // 売買条件データ（複数ある可能性）
     const conditions = JSON.parse(formData.get("conditions") as string || "[]");
@@ -64,17 +74,21 @@ async function createCheckpoint(request: Request, context: any) {
       nowUTC
     ).run();
 
-    // 投資仮説の挿入
+    // 投資仮説の挿入（新しいリスク評価システム）
     if (hypotheses && hypotheses.length > 0) {
       for (const hypothesis of hypotheses) {
-        if (hypothesis.trim()) {
+        if (hypothesis.description?.trim()) {
           await db.prepare(`
-            INSERT INTO hypotheses (hypothesis_id, checkpoint_id, description, is_active)
-            VALUES (?, ?, ?, 1)
+            INSERT INTO hypotheses (hypothesis_id, checkpoint_id, description, factor_type, price_impact, confidence_level, is_active, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
           `).bind(
             crypto.randomUUID(),
             checkpointId,
-            hypothesis.trim()
+            hypothesis.description.trim(),
+            hypothesis.factor_type,
+            hypothesis.price_impact,
+            hypothesis.confidence_level,
+            new Date().toISOString()
           ).run();
         }
       }

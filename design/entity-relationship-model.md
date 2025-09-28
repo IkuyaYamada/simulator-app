@@ -43,6 +43,9 @@ erDiagram
         UUID hypothesis_id PK
         UUID checkpoint_id FK
         TEXT description
+        TEXT factor_type
+        INTEGER price_impact
+        INTEGER confidence_level
         BOOLEAN is_active
         DATETIME updated_at
     }
