@@ -21,12 +21,9 @@ async function fetchAndSaveStockData(request: Request, context: any) {
       }, { status: 400 });
     }
 
-    // 日本株の正規化: 4桁の数字の場合は.Tを追加
-    let normalizedSymbol = symbol.toUpperCase();
-    if (/^\d{4}$/.test(normalizedSymbol)) {
-      normalizedSymbol = `${normalizedSymbol}.T`;
-      console.log(`Japanese stock detected, normalized symbol: ${symbol} -> ${normalizedSymbol}`);
-    }
+    // データベースでは4桁の整数をそのまま使用
+    const normalizedSymbol = symbol.toUpperCase();
+    console.log(`Processing symbol: ${symbol} -> ${normalizedSymbol}`);
 
     const db = context.cloudflare.env.simulator_app_db;
 
@@ -82,7 +79,30 @@ async function fetchAndSaveStockData(request: Request, context: any) {
       throw new Error(`Failed to parse stock info response: ${jsonError}`);
     }
 
-    // 3. 株価データをデータベースに保存
+    // 3. stocksテーブルにレコードが存在するかチェックし、存在しない場合は作成
+    const existingStock = await db
+      .prepare(`
+        SELECT symbol FROM stocks WHERE symbol = ?
+      `)
+      .bind(normalizedSymbol)
+      .first();
+
+    if (!existingStock) {
+      // stocksテーブルにレコードを作成
+      const finalCompanyName = stockInfo.longName || stockInfo.shortName || normalizedSymbol;
+      await db.prepare(`
+        INSERT INTO stocks (symbol, name, sector, industry)
+        VALUES (?, ?, ?, ?)
+      `).bind(
+        normalizedSymbol,
+        finalCompanyName,
+        stockInfo.sector || "不明",
+        stockInfo.industry || "不明"
+      ).run();
+      console.log(`Created stock record for ${normalizedSymbol}`);
+    }
+
+    // 4. 株価データをデータベースに保存
     if (stockInfo.chartData && stockInfo.chartData.length > 0) {
       const insertValues: Array<any> = [];
       

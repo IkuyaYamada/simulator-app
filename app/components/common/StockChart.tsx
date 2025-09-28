@@ -138,7 +138,7 @@ export function StockChart({
         minInterval: 0.01,
         axisLabel: {
           formatter: (value: number) => {
-            return `${symbol}${value?.toFixed(2)}`;
+            return Math.round(value).toString();
           }
         },
         splitLine: {
@@ -155,11 +155,11 @@ export function StockChart({
         axisLabel: {
           formatter: (value: number) => {
             if (value >= 1000000) {
-              return `${(value / 1000000).toFixed(1)}M`;
+              return `${Math.round(value / 1000000)}M`;
             } else if (value >= 1000) {
-              return `${(value / 1000).toFixed(1)}K`;
+              return `${Math.round(value / 1000)}K`;
             }
-            return value.toString();
+            return Math.round(value).toString();
           }
         },
         splitLine: {

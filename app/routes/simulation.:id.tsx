@@ -7,15 +7,20 @@ import { TradingConditionsModal } from "../components/TradingConditionsModal";
 
 // データ取得API-like functions
 async function getSimulation(db: any, id: string) {
+  console.log('getSimulation called with ID:', id);
+  
+  // LEFT JOINでシミュレーション情報と株式情報を一度に取得
   const simulation = await db
     .prepare(`
       SELECT s.*, st.name as stock_name, st.sector, st.industry
       FROM simulations s
-      JOIN stocks st ON s.symbol = st.symbol
+      LEFT JOIN stocks st ON s.symbol = st.symbol
       WHERE s.simulation_id = ?
     `)
     .bind(id)
     .first();
+    
+  console.log('getSimulation result:', simulation);
   return simulation;
 }
 
@@ -58,6 +63,9 @@ async function getConditions(db: any, id: string) {
 
 // 新しい定義: symbolを直接使用してstock情報とstock_pricesを取得
 async function getStockData(db: any, symbol: string) {
+  console.log('getStockData called with symbol:', symbol);
+  
+  // 株式情報を取得
   const stockData = await db
     .prepare(`
       SELECT symbol, name, sector, industry 
@@ -67,6 +75,9 @@ async function getStockData(db: any, symbol: string) {
     .bind(symbol)
     .first();
   
+  console.log('Stock data found:', stockData);
+  
+  // 株価データを取得
   const stockPrices = await db
     .prepare(`
       SELECT *
@@ -78,27 +89,36 @@ async function getStockData(db: any, symbol: string) {
     .bind(symbol)
     .all();
     
+  console.log('Stock prices found:', stockPrices.results?.length || 0);
+    
   return { stock: stockData, prices: stockPrices.results || [] };
 }
 
 export async function loader({ params, context, request }: LoaderFunctionArgs) {
   const { id } = params;
+  console.log('SimulationDetail loader called with ID:', id);
   
   if (!id) {
+    console.error('No simulation ID provided');
     throw new Response("Simulation ID is required", { status: 400 });
   }
 
   try {
     const db = context.cloudflare.env.simulator_app_db;
+    console.log('Database connection established');
     
     // 基本データを取得
+    console.log('Fetching simulation data for ID:', id);
     const simulationData = await getSimulation(db, id);
+    console.log('Simulation data:', simulationData);
 
     if (!simulationData) {
+      console.error('Simulation not found for ID:', id);
       throw new Response("Simulation not found", { status: 404 });
     }
 
     // symbolベースでstock情報とstock_pricesを取得
+    console.log('Fetching additional data for symbol:', simulationData.symbol);
     const [checkpointsData, pnlRecordsData, conditionsData, stockData] = await Promise.all([
       getCheckpoints(db, id),
       getPnLRecords(db, id),
@@ -106,6 +126,14 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
       // 新しいアプローチ：symbolベースでstockデータを直接取得
       getStockData(db, simulationData.symbol)
     ]);
+    
+    console.log('Additional data fetched:', {
+      checkpoints: checkpointsData?.length || 0,
+      pnlRecords: pnlRecordsData?.length || 0,
+      conditions: conditionsData?.length || 0,
+      stockData: stockData ? 'present' : 'null',
+      stockPrices: stockData?.prices?.length || 0
+    });
 
     // 株価データがない場合、API経由で取得・保存
     if (!stockData.prices || stockData.prices.length === 0) {
@@ -151,7 +179,15 @@ export async function loader({ params, context, request }: LoaderFunctionArgs) {
     });
   } catch (error) {
     console.error("Error getting simulation:", error);
-    throw new Response("Internal Server Error", { status: 500 });
+    return Response.json({
+      error: "Failed to load simulation data",
+      details: error instanceof Error ? error.message : String(error),
+      simulation: null,
+      checkpoints: [],
+      pnlRecords: [],
+      conditions: [],
+      stockData: null
+    }, { status: 500 });
   }
 }
 
@@ -162,12 +198,94 @@ export default function SimulationDetail() {
     pnlRecords: any[];
     conditions: any[];
     stockData: any; // 新規追加
+    error?: string;
+    details?: string;
   };
 
-  const { simulation, checkpoints, pnlRecords, conditions, stockData } = data;
+  const { simulation, checkpoints, pnlRecords, conditions, stockData, error, details } = data;
   const { id } = useParams();
   const fetcher = useFetcher();
   const navigate = useNavigate();
+  
+  // エラー表示
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <div className="flex items-center mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+                <span className="text-red-600 dark:text-red-400 text-xl">⚠️</span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                エラーが発生しました
+              </h3>
+            </div>
+          </div>
+          <div className="mt-2">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {error}
+            </p>
+            {details && (
+              <details className="mt-2">
+                <summary className="text-xs text-gray-500 dark:text-gray-500 cursor-pointer">
+                  詳細を表示
+                </summary>
+                <pre className="mt-2 text-xs text-gray-500 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 p-2 rounded overflow-auto">
+                  {details}
+                </pre>
+              </details>
+            )}
+          </div>
+          <div className="mt-6">
+            <button
+              onClick={() => navigate('/')}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+            >
+              ホームに戻る
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // シミュレーションデータがない場合
+  if (!simulation) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <div className="flex items-center mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center">
+                <span className="text-yellow-600 dark:text-yellow-400 text-xl">📊</span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                シミュレーションが見つかりません
+              </h3>
+            </div>
+          </div>
+          <div className="mt-2">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              指定されたシミュレーションIDが見つからないか、アクセス権限がありません。
+            </p>
+          </div>
+          <div className="mt-6">
+            <button
+              onClick={() => navigate('/')}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+            >
+              ホームに戻る
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   // 基本の株価情報（stabデータベース情報のみ）
   const [stockInfo, setStockInfo] = useState<any>(null);
