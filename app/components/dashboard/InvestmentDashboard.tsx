@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 import { Link, useLoaderData, useFetcher } from "react-router";
-import { NewSimulationModal } from "./NewSimulationModal";
 import { AIScreeningModal } from "./AIScreeningModal";
 import { formatToJSTDateOnly, formatCurrency } from "../../utils/date";
 
 export function InvestmentDashboard() {
-  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const data = useLoaderData() as {
     simulations?: any[];
@@ -59,12 +57,12 @@ export function InvestmentDashboard() {
               >
                 AI銘柄スクリーニング
               </button>
-              <button
-                onClick={() => setIsStockModalOpen(true)}
-                className="bg-green-400 hover:bg-green-500 text-black border border-green-600 px-3 py-1 text-sm font-bold"
+              <Link
+                to="/simulations/new"
+                className="bg-green-400 hover:bg-green-500 text-black border border-green-600 px-3 py-1 text-sm font-bold inline-block"
               >
                 銘柄指定
-              </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -91,12 +89,12 @@ export function InvestmentDashboard() {
               >
                 AI銘柄スクリーニング
               </button>
-              <button
-                onClick={() => setIsStockModalOpen(true)}
-                className="bg-green-400 hover:bg-green-500 text-black border border-green-600 px-3 py-1 text-sm font-bold"
+              <Link
+                to="/simulations/new"
+                className="bg-green-400 hover:bg-green-500 text-black border border-green-600 px-3 py-1 text-sm font-bold inline-block"
               >
                 銘柄指定
-              </button>
+              </Link>
             </div>
           </div>
         ) : (
@@ -175,11 +173,6 @@ export function InvestmentDashboard() {
           </div>
         )}
 
-        {/* 新規シミュレーションモーダル */}
-        <NewSimulationModal
-          isOpen={isStockModalOpen}
-          onClose={() => setIsStockModalOpen(false)}
-        />
         
         {/* AI銘柄スクリーニングモーダル */}
         <AIScreeningModal

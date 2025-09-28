@@ -37,7 +37,6 @@ export function TradingConditionsModal({
     }
 
     // 株価情報がある場合は前日終値を設定
-    console.log('stockData:', stockData);
     if (stockData?.previousClose) {
       return [
         {
@@ -75,10 +74,8 @@ export function TradingConditionsModal({
 
   // モーダルが開かれた時に初期条件を設定
   useEffect(() => {
-    console.log('TradingConditionsModal useEffect:', { isOpen, existingConditionsLength: existingConditions.length, stockData });
     if (isOpen) {
       const initialConditions = getInitialConditions();
-      console.log('Setting initial conditions:', initialConditions);
       setConditions(initialConditions);
     }
   }, [isOpen, stockData, existingConditions.length]);
