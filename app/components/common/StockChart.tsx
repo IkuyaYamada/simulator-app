@@ -38,6 +38,31 @@ export function StockChart({
   
   const formatValue = (val: number) => `${currencySymbol}${val?.toFixed(2) || 'N/A'}`;
 
+  // Early return if no data
+  if (!chartData || chartData.length === 0) {
+    return (
+      <div style={{ width, height }}>
+        <div 
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f9fafb',
+            border: '1px solid #e5e7eb',
+            borderRadius: '0.375rem'
+          }}
+        >
+          <div className="text-center text-gray-600">
+            <div className="text-xl mb-2">📊</div>
+            <div>チャートデータがありません</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // 売却条件の線を生成
   const generateTradingConditionLines = () => {
     if (!tradingConditions || tradingConditions.length === 0) return [];
@@ -86,11 +111,13 @@ export function StockChart({
 
   const referenceUrl = getReferenceUrl();
 
-  const option = {
-    // パフォーマンス向上のレンダリング設定
-    lazyUpdate: true,
-    hoverLayerThreshold: 10000,
-    animation: false,
+  const option = (() => {
+    try {
+      return {
+        // パフォーマンス向上のレンダリング設定
+        lazyUpdate: true,
+        hoverLayerThreshold: 10000,
+        animation: false,
     
     grid: [
       {
@@ -350,15 +377,56 @@ export function StockChart({
       }
     ]
   };
+    } catch (error) {
+      console.error('Error creating chart option:', error);
+      return {
+        title: {
+          text: 'チャートの作成中にエラーが発生しました',
+          left: 'center',
+          top: 'middle',
+          textStyle: {
+            color: '#ef4444',
+            fontSize: 16
+          }
+        }
+      };
+    }
+  })();
 
   return (
     <div style={{ width }}>
       <div style={{ height }}>
-        <ReactECharts 
-          option={option}
-          style={{ width: '100%', height: '100%' }}
-          notMerge={true}
-        />
+        {/* Add safety check for chartData */}
+        {chartData && chartData.length > 0 ? (
+          <ReactECharts 
+            option={option}
+            style={{ width: '100%', height: '100%' }}
+            notMerge={true}
+            lazyUpdate={false}
+            opts={{
+              renderer: 'canvas', // Force canvas renderer for better compatibility
+              useDirtyRect: false  // Disable dirty rect optimization that might cause issues
+            }}
+          />
+        ) : (
+          <div 
+            style={{ 
+              width: '100%', 
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: '0.375rem'
+            }}
+          >
+            <div className="text-center text-gray-600">
+              <div className="text-xl mb-2">📊</div>
+              <div>チャートデータがありません</div>
+            </div>
+          </div>
+        )}
       </div>
       {referenceUrl && (
         <div className="mt-2 text-sm text-gray-600">
