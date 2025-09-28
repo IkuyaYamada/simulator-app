@@ -138,7 +138,7 @@ export function StockChart({
         minInterval: 0.01,
         axisLabel: {
           formatter: (value: number) => {
-            return `${symbol}${value?.toFixed(2)}`;
+            return value?.toFixed(2).toString();
           }
         },
         splitLine: {
