@@ -1,5 +1,4 @@
 import React from 'react';
-import ReactECharts from 'echarts-for-react';
 
 interface StockChartProps {
   chartData: Array<{
@@ -37,6 +36,114 @@ export function StockChart({
   const currencySymbol = currency === 'JPY' ? '¥' : '$';
   
   const formatValue = (val: number) => `${currencySymbol}${val?.toFixed(2) || 'N/A'}`;
+
+  // Early return if no data
+  if (!chartData || chartData.length === 0) {
+    return (
+      <div style={{ width, height }}>
+        <div 
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f9fafb',
+            border: '1px solid #e5e7eb',
+            borderRadius: '0.375rem'
+          }}
+        >
+          <div className="text-center text-gray-600">
+            <div className="text-xl mb-2">📊</div>
+            <div>チャートデータがありません</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Lazy load ReactECharts with error handling
+  const [ReactECharts, setReactECharts] = React.useState<any>(null);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    // Dynamic import with error handling
+    import('echarts-for-react')
+      .then((module) => {
+        if (isMounted) {
+          setReactECharts(() => module.default);
+          setIsLoading(false);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load ECharts:', error);
+        if (isMounted) {
+          setLoadError('チャートライブラリの読み込みに失敗しました');
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div style={{ width, height }}>
+        <div 
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f9fafb',
+            border: '1px solid #e5e7eb',
+            borderRadius: '0.375rem'
+          }}
+        >
+          <div className="text-center text-gray-600">
+            <div className="text-xl mb-2">⏳</div>
+            <div>チャートを読み込み中...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError || !ReactECharts) {
+    return (
+      <div style={{ width, height }}>
+        <div 
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '0.375rem'
+          }}
+        >
+          <div className="text-center text-red-600">
+            <div className="text-xl mb-2">⚠️</div>
+            <div>{loadError || 'チャートライブラリの読み込みエラー'}</div>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-3 px-4 py-2 bg-red-600 text-white text-xs rounded-md hover:bg-red-700"
+            >
+              再読み込み
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 売却条件の線を生成
   const generateTradingConditionLines = () => {
@@ -86,11 +193,13 @@ export function StockChart({
 
   const referenceUrl = getReferenceUrl();
 
-  const option = {
-    // パフォーマンス向上のレンダリング設定
-    lazyUpdate: true,
-    hoverLayerThreshold: 10000,
-    animation: false,
+  const option = (() => {
+    try {
+      return {
+        // パフォーマンス向上のレンダリング設定
+        lazyUpdate: true,
+        hoverLayerThreshold: 10000,
+        animation: false,
     
     grid: [
       {
@@ -350,15 +459,56 @@ export function StockChart({
       }
     ]
   };
+    } catch (error) {
+      console.error('Error creating chart option:', error);
+      return {
+        title: {
+          text: 'チャートの作成中にエラーが発生しました',
+          left: 'center',
+          top: 'middle',
+          textStyle: {
+            color: '#ef4444',
+            fontSize: 16
+          }
+        }
+      };
+    }
+  })();
 
   return (
     <div style={{ width }}>
       <div style={{ height }}>
-        <ReactECharts 
-          option={option}
-          style={{ width: '100%', height: '100%' }}
-          notMerge={true}
-        />
+        {/* Add safety check for chartData */}
+        {chartData && chartData.length > 0 && ReactECharts ? (
+          <ReactECharts 
+            option={option}
+            style={{ width: '100%', height: '100%' }}
+            notMerge={true}
+            lazyUpdate={false}
+            opts={{
+              renderer: 'canvas', // Force canvas renderer for better compatibility
+              useDirtyRect: false  // Disable dirty rect optimization that might cause issues
+            }}
+          />
+        ) : (
+          <div 
+            style={{ 
+              width: '100%', 
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: '0.375rem'
+            }}
+          >
+            <div className="text-center text-gray-600">
+              <div className="text-xl mb-2">📊</div>
+              <div>チャートデータがありません</div>
+            </div>
+          </div>
+        )}
       </div>
       {referenceUrl && (
         <div className="mt-2 text-sm text-gray-600">

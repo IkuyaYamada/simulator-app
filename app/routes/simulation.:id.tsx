@@ -2,7 +2,8 @@ import { useLoaderData, Link, useFetcher, useParams, useNavigate } from "react-r
 import { useState, useEffect, useMemo } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { formatToJST } from "../utils/date";
-import { StockChart } from "../components/common/StockChart";
+import { ClientOnlyStockChart } from "../components/common/ClientOnlyStockChart";
+import { ChartErrorBoundary } from "../components/common/ChartErrorBoundary";
 import { TradingConditionsModal } from "../components/TradingConditionsModal";
 
 // データ取得API-like functions
@@ -336,7 +337,11 @@ export default function SimulationDetail() {
 
   // ページロード時に stockData からデータを設定、データがない場合は外部APIから取得
   useEffect(() => {
+    console.log('Processing stockData:', stockData);
+    
     if (stockData && stockData.prices && stockData.prices.length > 0) {
+      console.log('Found stock prices in database:', stockData.prices.length);
+      
       // データベースから取得したstock_pricesデータを使用
       const formattedPrices = stockData.prices.map((price: any) => {
         if (!price || !price.price_date) return null;
@@ -351,7 +356,10 @@ export default function SimulationDetail() {
         const isValid = !isNaN(numOpen) && !isNaN(numClose) && !isNaN(numHigh) && !isNaN(numLow) &&
                        numOpen > 0 && numClose > 0 && numHigh > 0 && numLow > 0;
         
-        if (!isValid) return null;
+        if (!isValid) {
+          console.warn('Invalid price data:', price);
+          return null;
+        }
         
         const priceDate = new Date(price.price_date);
         if (isNaN(priceDate.getTime())) return null;
@@ -368,11 +376,16 @@ export default function SimulationDetail() {
         };
       }).filter((item: any) => item !== null); // 無効なデータを除外
       
+      console.log('Formatted prices:', formattedPrices.length);
       setChartData(formattedPrices.reverse()); // 時系列順に並び替え
+    } else {
+      console.log('No stock prices found in database');
+      setChartData([]);
     }
     
     // 基本的な株価情報を設定（データベースから取得された情報）
     if (stockData && stockData.stock) {
+      console.log('Setting stock info:', stockData.stock);
       setStockInfo({
         symbol: stockData.stock.symbol,
         name: stockData.stock.name,
@@ -380,6 +393,8 @@ export default function SimulationDetail() {
         industry: stockData.stock.industry,
         currency: 'JPY' // 日本市場を想定
       });
+    } else {
+      console.log('No stock info found in stockData');
     }
   }, [stockData, simulation]);
   
@@ -826,37 +841,66 @@ export default function SimulationDetail() {
             {/* チャート表示切替ボタン削除 - ローソク足固定 */}
 
             <div style={{ width: '100%', height: '600px' }}>
-              {(() => {
-                const currentChartData = chartDataWithMarkers.length > 0 ? chartDataWithMarkers : (filteredChartData.length > 0 ? filteredChartData : chartData);
-                
-                if (!currentChartData || currentChartData.length === 0) {
-                  return <div>データなし</div>;
-                }
-                
-                // データを共通コンポーネント用の形式に変換
-                const transformedData = currentChartData.map((data: any) => ({
-                  date: data.date || data.fullDate || (data.timestamp ? new Date(data.timestamp * 1000).toISOString().split('T')[0] : ''),
-                  open: Number(data.open) || 0,
-                  high: Number(data.high) || 0,
-                  low: Number(data.low) || 0,
-                  close: Number(data.close) || 0,
-                  volume: Number(data.volume) || 0,
-                  ma5: data.ma5,
-                  ma10: data.ma10,
-                  ma20: data.ma20,
-                  ma30: data.ma30
-                })).filter(data => data.open > 0 && data.close > 0 && data.high > 0 && data.low > 0);
-                
-                return (
-                  <StockChart 
-                    chartData={transformedData}
-                    currency={stockInfo?.currency || 'USD'}
-                    height="600px"
-                    tradingConditions={tradingConditions}
-                    symbol={stockInfo?.symbol}
-                  />
-                );
-              })()}
+              <ChartErrorBoundary>
+                {(() => {
+                  const currentChartData = chartDataWithMarkers.length > 0 ? chartDataWithMarkers : (filteredChartData.length > 0 ? filteredChartData : chartData);
+                  
+                  if (!currentChartData || currentChartData.length === 0) {
+                    return (
+                      <div 
+                        style={{ 
+                          width: '100%', 
+                          height: '600px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#f9fafb',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '0.375rem'
+                        }}
+                      >
+                        <div className="text-center text-gray-600">
+                          <div className="text-xl mb-2">📈</div>
+                          <div>データなし</div>
+                          <div className="text-xs text-gray-500 mt-2">
+                            シンボル: {simulation.symbol}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  // データを共通コンポーネント用の形式に変換
+                  const transformedData = currentChartData.map((data: any) => ({
+                    date: data.date || data.fullDate || (data.timestamp ? new Date(data.timestamp * 1000).toISOString().split('T')[0] : ''),
+                    open: Number(data.open) || 0,
+                    high: Number(data.high) || 0,
+                    low: Number(data.low) || 0,
+                    close: Number(data.close) || 0,
+                    volume: Number(data.volume) || 0,
+                    ma5: data.ma5,
+                    ma10: data.ma10,
+                    ma20: data.ma20,
+                    ma30: data.ma30
+                  })).filter(data => data.open > 0 && data.close > 0 && data.high > 0 && data.low > 0);
+                  
+                  console.log('Chart data transformed:', {
+                    original: currentChartData.length,
+                    transformed: transformedData.length,
+                    sample: transformedData[0]
+                  });
+                  
+                  return (
+                    <ClientOnlyStockChart 
+                      chartData={transformedData}
+                      currency={stockInfo?.currency || 'USD'}
+                      height="600px"
+                      tradingConditions={tradingConditions}
+                      symbol={stockInfo?.symbol}
+                    />
+                  );
+                })()}
+              </ChartErrorBoundary>
               {/* 旧チャートコードは一時的にコメントアウト
               <ReactECharts 
                 key={`candlestick-${id}`}
